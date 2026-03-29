@@ -1,9 +1,15 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-// Função 1: Criar uma nova regra de horas (Ex: Extensão vale 40h)
+// Criar uma nova regra de horas
 exports.postCriarRegra = async (req, res) => {
     const { curso_id, nome_categoria, limite_horas } = req.body;
+
+    if (req.usuario.curso_id != curso_id) {
+        return res.status(403).json({ 
+            erro: "Você não tem acesso a este curso." 
+        });
+    }
 
     try {
         const query = `
@@ -21,9 +27,15 @@ exports.postCriarRegra = async (req, res) => {
     }
 };
 
-// Função 2: Listar todas as regras de um curso específico
+// Listar regras de um curso
 exports.getRegrasPorCurso = async (req, res) => {
-    const { curso_id } = req.params; // Pegamos o ID que vem na URL
+    const { curso_id } = req.params;
+
+    if (req.usuario.curso_id != curso_id) {
+        return res.status(403).json({ 
+            erro: "Você não tem acesso a este curso." 
+        });
+    }
 
     try {
         const resultado = await pool.query(
@@ -35,9 +47,17 @@ exports.getRegrasPorCurso = async (req, res) => {
         res.status(500).json({ erro: "Erro ao buscar regras: " + err.message });
     }
 };
-// 1. CADASTRAR ALUNO (O coordenador cria o acesso do aluno)
+
+// Cadastrar aluno
 exports.postCadastrarAluno = async (req, res) => {
     const { nome, email, senha, matricula, curso_id } = req.body;
+
+    if (req.usuario.curso_id != curso_id) {
+        return res.status(403).json({ 
+            erro: "Você não tem acesso a este curso." 
+        });
+    }
+
     try {
         const senhaCripto = await bcrypt.hash(senha, 10);
         const query = `
@@ -51,9 +71,16 @@ exports.postCadastrarAluno = async (req, res) => {
     }
 };
 
-// 2. VER ALUNOS (Listar todos os alunos do curso dele)
+// Ver alunos do curso
 exports.getAlunosDoCurso = async (req, res) => {
     const { curso_id } = req.params;
+
+    if (req.usuario.curso_id != curso_id) {
+        return res.status(403).json({ 
+            erro: "Você só pode ver alunos do seu próprio curso." 
+        });
+    }
+
     try {
         const query = `SELECT id, nome, email, matricula FROM usuarios WHERE curso_id = $1 AND perfil = 'ALUNO'`;
         const resultado = await pool.query(query, [curso_id]);
@@ -63,9 +90,16 @@ exports.getAlunosDoCurso = async (req, res) => {
     }
 };
 
-// 3. VER SUBMISSÕES (Ver o que os alunos enviaram e está pendente)
+// Ver submissões pendentes
 exports.getSubmissoesPendentes = async (req, res) => {
     const { curso_id } = req.params;
+
+    if (req.usuario.curso_id != curso_id) {
+        return res.status(403).json({ 
+            erro: "Você não tem acesso a este curso." 
+        });
+    }
+
     try {
         const query = `
             SELECT a.*, u.nome as nome_aluno 
@@ -79,13 +113,11 @@ exports.getSubmissoesPendentes = async (req, res) => {
     }
 };
 
-// 4. VALIDAR SUBMISSÃO (Aprovar ou Rejeitar)
-// 4. VALIDAR SUBMISSÃO (Aprovar ou Rejeitar)
+// Validar submissão
 exports.patchValidarSubmissao = async (req, res) => {
     const { id } = req.params;
     const { status_final } = req.body;
 
-    // Garante que só aceita APROVADO ou REJEITADO
     if (!['APROVADO', 'REJEITADO'].includes(status_final)) {
         return res.status(400).json({ 
             erro: "Status deve ser APROVADO ou REJEITADO." 
@@ -111,4 +143,4 @@ exports.patchValidarSubmissao = async (req, res) => {
     } catch (err) {
         res.status(500).json({ erro: err.message });
     }
-};
+}; 

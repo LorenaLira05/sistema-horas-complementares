@@ -18,6 +18,8 @@ const authMiddleware = (perfisPermitidos) => {
         
             const dados = jwt.verify(token, process.env.JWT_SECRET);
 
+            req.usuario = dados;
+            
             if (!perfisPermitidos.includes(dados.perfil)) {
                 return res.status(403).json({ erro: "Você não tem permissão para acessar esta área." });
             }
