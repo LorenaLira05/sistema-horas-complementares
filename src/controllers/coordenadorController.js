@@ -1,7 +1,6 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-
 exports.postCriarRegra = async (req, res) => {
     const { curso_id, nome_categoria, limite_horas } = req.body;
 
