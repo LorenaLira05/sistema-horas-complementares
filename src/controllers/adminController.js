@@ -17,10 +17,9 @@ exports.getListaCursos = async (req, res) => {
         // O gerente pede ao banco todos os cursos
         const resultado = await pool.query('SELECT * FROM cursos');
         
-        // O gerente responde para o usuário com a lista
         res.status(200).json(resultado.rows);
     } catch (err) {
-        // Se der erro (ex: tabela não existe), o gerente avisa
+      
         res.status(500).json({ erro: "Erro ao buscar cursos: " + err.message });
     }
 };
