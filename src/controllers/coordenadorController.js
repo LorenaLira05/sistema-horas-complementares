@@ -1,7 +1,7 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
-// Criar uma nova regra de horas
+
 exports.postCriarRegra = async (req, res) => {
     const { curso_id, nome_categoria, limite_horas } = req.body;
 
@@ -27,7 +27,7 @@ exports.postCriarRegra = async (req, res) => {
     }
 };
 
-// Listar regras de um curso
+
 exports.getRegrasPorCurso = async (req, res) => {
     const { curso_id } = req.params;
 
@@ -48,7 +48,7 @@ exports.getRegrasPorCurso = async (req, res) => {
     }
 };
 
-// Cadastrar aluno
+
 exports.postCadastrarAluno = async (req, res) => {
     const { nome, email, senha, matricula, curso_id } = req.body;
 
@@ -90,7 +90,7 @@ exports.getAlunosDoCurso = async (req, res) => {
     }
 };
 
-// Ver submissões pendentes
+
 exports.getSubmissoesPendentes = async (req, res) => {
     const { curso_id } = req.params;
 
@@ -113,7 +113,7 @@ exports.getSubmissoesPendentes = async (req, res) => {
     }
 };
 
-// Validar submissão
+
 exports.patchValidarSubmissao = async (req, res) => {
     const { id } = req.params;
     const { status_final } = req.body;
