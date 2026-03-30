@@ -1,4 +1,3 @@
-// Importamos a conexão com o banco que você fez com o Claude
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 
@@ -12,7 +11,7 @@ exports.postCriarCurso = async (req, res) => {
         res.status(500).json({ erro: err.message });
     }
 };
-// Função para listar cursos (só para testarmos se o gerente acessa o banco)
+
 exports.getListaCursos = async (req, res) => {
     try {
         // O gerente pede ao banco todos os cursos
@@ -25,8 +24,6 @@ exports.getListaCursos = async (req, res) => {
         res.status(500).json({ erro: "Erro ao buscar cursos: " + err.message });
     }
 };
-
-// Função para cadastrar um novo Coordenador
 exports.postCadastrarCoordenador = async (req, res) => {
     const { nome, email, senha, curso_id } = req.body;
 
