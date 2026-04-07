@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const authMiddleware = require('../middleware/auth');
+const alunoController = require('../controllers/alunoController');
 
 router.get('/teste', (req, res) => res.json({ msg: "Rota Aluno funcionando!" }));
 
@@ -7,4 +9,4 @@ router.post('/submissao', authMiddleware(['ALUNO']), alunoController.postSubmete
 router.get('/submissoes', authMiddleware(['ALUNO']), alunoController.getMinhasSubmissoes);         
 router.put('/submissao/:id', authMiddleware(['ALUNO']), alunoController.putEditarSubmissao);      
 
-module.exports = router;
+module.exports = router; 
