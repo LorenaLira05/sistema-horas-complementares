@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 
+
 exports.postSubmeterAtividade = async (req, res) => {
     const { regra_id, descricao, horas_solicitadas } = req.body;
     const aluno_id = req.usuario.id;
