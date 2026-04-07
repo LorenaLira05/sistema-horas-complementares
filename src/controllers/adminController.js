@@ -60,3 +60,50 @@ exports.postCadastrarCoordenador = async (req, res) => {
     }
 };
 
+// Atualizar curso
+exports.putAtualizarCurso = async (req, res) => {
+    const { id } = req.params;
+    const { nome_curso, sigla, carga_horaria, duracao } = req.body;
+
+    try {
+        const query = `
+            UPDATE cursos 
+            SET nome_curso = $1, sigla = $2, carga_horaria = $3, duracao = $4
+            WHERE id = $5
+            RETURNING *`;
+
+        const resultado = await pool.query(query, [nome_curso, sigla, carga_horaria, duracao, id]);
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ erro: "Curso não encontrado." });
+        }
+
+        res.status(200).json({ mensagem: "Curso atualizado!", curso: resultado.rows[0] });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};
+
+// Atualizar coordenador
+exports.putAtualizarCoordenador = async (req, res) => {
+    const { id } = req.params;
+    const { nome, email, curso_id } = req.body;
+
+    try {
+        const query = `
+            UPDATE usuarios 
+            SET nome = $1, email = $2, curso_id = $3
+            WHERE id = $4 AND perfil = 'COORDENADOR'
+            RETURNING id, nome, email, curso_id`;
+
+        const resultado = await pool.query(query, [nome, email, curso_id, id]);
+
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ erro: "Coordenador não encontrado." });
+        }
+
+        res.status(200).json({ mensagem: "Coordenador atualizado!", dados: resultado.rows[0] });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};

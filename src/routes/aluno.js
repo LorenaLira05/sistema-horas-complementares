@@ -3,4 +3,8 @@ const router = express.Router();
 
 router.get('/teste', (req, res) => res.json({ msg: "Rota Aluno funcionando!" }));
 
+router.post('/submissao', authMiddleware(['ALUNO']), alunoController.postSubmeterAtividade);   
+router.get('/submissoes', authMiddleware(['ALUNO']), alunoController.getMinhasSubmissoes);         
+router.put('/submissao/:id', authMiddleware(['ALUNO']), alunoController.putEditarSubmissao);      
+
 module.exports = router;

@@ -156,3 +156,68 @@ exports.patchValidarSubmissao = async (req, res) => {
         res.status(500).json({ erro: err.message });
     }
 };
+
+exports.putAtualizarRegra = async (req, res) => {
+    const { id } = req.params;
+    const { nome_categoria, limite_horas } = req.body;
+
+    try {
+        const regra = await pool.query(
+            'SELECT * FROM regras_atividades WHERE id = $1',
+            [id]
+        );
+
+        if (regra.rows.length === 0) {
+            return res.status(404).json({ erro: "Regra não encontrada." });
+        }
+
+        if (req.usuario.curso_id != regra.rows[0].curso_id) {
+            return res.status(403).json({ erro: "Você não tem acesso a esta regra." });
+        }
+
+        const query = `
+            UPDATE regras_atividades 
+            SET nome_categoria = $1, limite_horas = $2
+            WHERE id = $3
+            RETURNING *`;
+
+        const resultado = await pool.query(query, [nome_categoria, limite_horas, id]);
+
+        res.status(200).json({ mensagem: "Regra atualizada!", regra: resultado.rows[0] });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};
+
+exports.putAtualizarAluno = async (req, res) => {
+    const { id } = req.params;
+    const { nome, email, matricula } = req.body;
+
+    try {
+        // Busca o aluno primeiro e ver se pertence ao curso 
+        const aluno = await pool.query(
+            "SELECT * FROM usuarios WHERE id = $1 AND perfil = 'ALUNO'",
+            [id]
+        );
+
+        if (aluno.rows.length === 0) {
+            return res.status(404).json({ erro: "Aluno não encontrado." });
+        }
+
+        if (req.usuario.curso_id != aluno.rows[0].curso_id) {
+            return res.status(403).json({ erro: "Você não tem acesso a este aluno." });
+        }
+
+        const query = `
+            UPDATE usuarios 
+            SET nome = $1, email = $2, matricula = $3
+            WHERE id = $4 AND perfil = 'ALUNO'
+            RETURNING id, nome, email, matricula`;
+
+        const resultado = await pool.query(query, [nome, email, matricula, id]);
+
+        res.status(200).json({ mensagem: "Aluno atualizado!", aluno: resultado.rows[0] });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};
