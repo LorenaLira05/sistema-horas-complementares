@@ -9,4 +9,4 @@ router.post('/submissao', authMiddleware(['ALUNO']), alunoController.postSubmete
 router.get('/submissoes', authMiddleware(['ALUNO']), alunoController.getMinhasSubmissoes);         
 router.put('/submissao/:id', authMiddleware(['ALUNO']), alunoController.putEditarSubmissao);      
 
-module.exports = router;
+module.exports = router; 
