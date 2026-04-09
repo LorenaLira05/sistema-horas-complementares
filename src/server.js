@@ -14,12 +14,13 @@ const rotasAdmin = require('./routes/admin');
 const rotasCoordenador = require('./routes/coordenador');
 const rotasAluno = require('./routes/aluno');
 const rotasAuth = require('./routes/authRoutes');
+const rotasDashboard = require('./routes/dashboard');
 
 app.use('/admin', rotasAdmin);
 app.use('/coordenador', rotasCoordenador);
 app.use('/aluno', rotasAluno);
 app.use('/auth', rotasAuth);
-
+app.use('/dashboard', rotasDashboard);
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
