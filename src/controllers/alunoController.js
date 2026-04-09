@@ -93,3 +93,24 @@ exports.putEditarSubmissao = async (req, res) => {
         res.status(500).json({ erro: err.message });
     }
 };
+
+// só se ainda estiver PENDENTE
+exports.deleteSubmissao = async (req, res) => {
+    const { id } = req.params;
+    const aluno_id = req.usuario.id;
+    try {
+        const submissao = await pool.query(
+            'SELECT * FROM atividades_enviadas WHERE id = $1 AND aluno_id = $2', [id, aluno_id]
+        );
+        if (submissao.rows.length === 0) {
+            return res.status(404).json({ erro: "Submissão não encontrada." });
+        }
+        if (submissao.rows[0].status !== 'PENDENTE') {
+            return res.status(400).json({ erro: "Você só pode deletar submissões pendentes." });
+        }
+        await pool.query('DELETE FROM atividades_enviadas WHERE id = $1', [id]);
+        res.status(200).json({ mensagem: "Submissão deletada com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};

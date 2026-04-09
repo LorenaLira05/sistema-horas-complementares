@@ -12,4 +12,7 @@ router.post('/curso', authMiddleware(['SUPER_ADMIN']), adminController.postCriar
 router.get('/coordenadores', authMiddleware(['SUPER_ADMIN']), adminController.getListaCoordenadores);
 router.put('/coordenador/:id', authMiddleware(['SUPER_ADMIN']), adminController.putAtualizarCoordenador);
 
+router.delete('/curso/:id', authMiddleware(['SUPER_ADMIN']), adminController.deleteCurso);
+router.delete('/coordenador/:id', authMiddleware(['SUPER_ADMIN']), adminController.deleteCoordenador);
+
 module.exports = router;

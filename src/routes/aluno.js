@@ -9,4 +9,6 @@ router.post('/submissao', authMiddleware(['ALUNO']), alunoController.postSubmete
 router.get('/submissoes', authMiddleware(['ALUNO']), alunoController.getMinhasSubmissoes);         
 router.put('/submissao/:id', authMiddleware(['ALUNO']), alunoController.putEditarSubmissao);      
 
+router.delete('/submissao/:id', authMiddleware(['ALUNO']), alunoController.deleteSubmissao);
+
 module.exports = router; 

@@ -107,3 +107,33 @@ exports.putAtualizarCoordenador = async (req, res) => {
         res.status(500).json({ erro: err.message });
     }
 };
+
+exports.deleteCurso = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const resultado = await pool.query(
+            'DELETE FROM cursos WHERE id = $1 RETURNING *', [id]
+        );
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ erro: "Curso não encontrado." });
+        }
+        res.status(200).json({ mensagem: "Curso deletado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};
+
+exports.deleteCoordenador = async (req, res) => {
+    const { id } = req.params;
+    try {
+        const resultado = await pool.query(
+            "DELETE FROM usuarios WHERE id = $1 AND perfil = 'COORDENADOR' RETURNING *", [id]
+        );
+        if (resultado.rows.length === 0) {
+            return res.status(404).json({ erro: "Coordenador não encontrado." });
+        }
+        res.status(200).json({ mensagem: "Coordenador deletado com sucesso!" });
+    } catch (err) {
+        res.status(500).json({ erro: err.message });
+    }
+};

@@ -18,4 +18,7 @@ router.get('/submissao/:id', authMiddleware(['COORDENADOR']), coordenadorControl
 
 router.patch('/validar/:id', authMiddleware(['COORDENADOR']), coordenadorController.patchValidarSubmissao);
 
+router.delete('/aluno/:id', authMiddleware(['COORDENADOR']), coordenadorController.deleteAluno);
+router.delete('/regras/:id', authMiddleware(['COORDENADOR']), coordenadorController.deleteRegra);
+
 module.exports = router;
