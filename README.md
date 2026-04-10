@@ -222,10 +222,10 @@ Acesse: **http://localhost:3001**
 - [x] Regras de atividades por curso
 - [x] Validação e reprovação de submissões
 - [x] Segurança — coordenador acessa apenas seu próprio curso
-- [x] Frontend conectado ao backend
 
 ## Em Desenvolvimento
 
+- [ ] Frontend conectado ao backend
 - [ ] Dashboard de métricas
 - [ ] Upload de certificados 
 - [ ] OCR para leitura de certificados 
