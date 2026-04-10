@@ -235,9 +235,6 @@ Acesse: **http://localhost:3001**
 
 ---
 
-
----
-
 ## Licença
 
 Este projeto foi desenvolvido para fins acadêmicos — SENAC 2026.
