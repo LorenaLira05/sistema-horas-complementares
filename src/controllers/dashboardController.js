@@ -10,7 +10,7 @@ exports.getDashboardCoordenador = async (req, res) => {
                 COUNT(*) FILTER (WHERE a.status = 'PENDENTE') as pendentes,
                 COUNT(*) FILTER (WHERE a.status = 'APROVADO') as aprovadas,
                 COUNT(*) FILTER (WHERE a.status = 'REJEITADO') as reprovadas,
-                COALESCE(AVG(a.horas_aprovadas) FILTER (WHERE a.status = 'APROVADO'), 0) as media_horas
+                ROUND(COALESCE(AVG(a.horas_aprovadas) FILTER (WHERE a.status = 'APROVADO'), 0), 1) as media_horas
             FROM atividades_enviadas a
             JOIN usuarios u ON a.aluno_id = u.id
             WHERE u.curso_id = $1`,
@@ -25,6 +25,12 @@ exports.getDashboardCoordenador = async (req, res) => {
             [curso_id]
         );
 
+        // Cursos ativos
+        const cursos = await pool.query(`
+            SELECT COUNT(*) as total_cursos
+            FROM cursos`,
+        );
+
         // Envios por categoria
         const porCategoria = await pool.query(`
             SELECT 
@@ -37,6 +43,19 @@ exports.getDashboardCoordenador = async (req, res) => {
             GROUP BY r.nome_categoria
             ORDER BY total DESC`,
             [curso_id]
+        );
+
+        // Cursos com mais envios
+        const cursosMaisEnvios = await pool.query(`
+            SELECT 
+                c.nome_curso,
+                COUNT(*) as total_envios
+            FROM atividades_enviadas a
+            JOIN usuarios u ON a.aluno_id = u.id
+            JOIN cursos c ON c.id = u.curso_id
+            GROUP BY c.nome_curso
+            ORDER BY total_envios DESC
+            LIMIT 5`
         );
 
         // Últimas 5 atividades
@@ -60,7 +79,9 @@ exports.getDashboardCoordenador = async (req, res) => {
         res.status(200).json({
             metricas: metricas.rows[0],
             total_alunos: alunos.rows[0].total_alunos,
+            total_cursos: cursos.rows[0].total_cursos,
             por_categoria: porCategoria.rows,
+            cursos_mais_envios: cursosMaisEnvios.rows,
             ultimas_atividades: ultimasAtividades.rows
         });
 
