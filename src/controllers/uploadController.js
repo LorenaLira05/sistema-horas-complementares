@@ -30,7 +30,6 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 } 
 });
 
-// POST /upload/certificado/:atividade_id
 exports.uploadCertificado = [
     upload.single('certificado'),
     async (req, res) => {

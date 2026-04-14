@@ -49,7 +49,6 @@ exports.setup = async (req, res) => {
     const { email, senha } = req.body;
 
     try {
-        // Verifica se já existe algum Super Admin
         const existe = await pool.query(
             "SELECT * FROM usuarios WHERE perfil = 'SUPER_ADMIN'"
         );

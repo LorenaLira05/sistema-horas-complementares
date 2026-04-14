@@ -99,7 +99,6 @@ exports.getSubmissoes = async (req, res) => {
     const itensPorPagina = 10;
     const offset = (pagina - 1) * itensPorPagina;
 
-    // Verifica se o coordenador pertence ao curso
     if (req.usuario.curso_id != curso_id) {
         return res.status(403).json({
             erro: "Você não tem acesso a este curso."
@@ -107,7 +106,6 @@ exports.getSubmissoes = async (req, res) => {
     }
 
     try {
-        // Monta o filtro de status dinamicamente
         let filtroStatus = '';
         let params = [curso_id];
 
@@ -121,7 +119,6 @@ exports.getSubmissoes = async (req, res) => {
             params.push(offset);
         }
 
-        // Busca as submissões com paginação
         const query = `
             SELECT 
                 a.*,
@@ -140,7 +137,6 @@ exports.getSubmissoes = async (req, res) => {
 
         const resultado = await pool.query(query, params);
 
-        // Conta totais por status
         const contadores = await pool.query(`
             SELECT
                 COUNT(*) FILTER (WHERE status = 'PENDENTE') as pendentes,
@@ -165,7 +161,6 @@ exports.getSubmissoes = async (req, res) => {
     }
 };
 
-// Buscar submissão por ID
 exports.getSubmissaoPorId = async (req, res) => {
     const { id } = req.params;
 
@@ -232,7 +227,8 @@ exports.patchValidarSubmissao = async (req, res) => {
         if (resultado.rows.length === 0) {
             return res.status(404).json({ erro: "Submissão não encontrada." });
         }
-        // Busca os dados do aluno para enviar o e-mail
+
+
     const aluno = await pool.query(
     'SELECT nome, email FROM usuarios WHERE id = $1',
     [resultado.rows[0].aluno_id]
@@ -295,7 +291,7 @@ exports.putAtualizarAluno = async (req, res) => {
     const { nome, email, matricula } = req.body;
 
     try {
-        // Busca o aluno primeiro e ver se pertence ao curso 
+        
         const aluno = await pool.query(
             "SELECT * FROM usuarios WHERE id = $1 AND perfil = 'ALUNO'",
             [id]

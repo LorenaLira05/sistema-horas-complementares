@@ -52,7 +52,7 @@ exports.postSubmeterAtividade = async (req, res) => {
         [aluno_id]
     );
 
-    // Envia o e-mail para o coordenador
+    // coloquei uma msg no console para verificar se o coordenador foi encontrado antes de tentar enviar o email
     if (coordenador.rows.length > 0) {
         console.log("Vai tentar enviar email...");
         await emailNovaSubmissao(

@@ -4,7 +4,6 @@ exports.getDashboardCoordenador = async (req, res) => {
     const curso_id = req.usuario.curso_id;
 
     try {
-        // Métricas gerais das submissões
         const metricas = await pool.query(`
             SELECT
                 COUNT(*) FILTER (WHERE a.status = 'PENDENTE') as pendentes,
@@ -17,7 +16,6 @@ exports.getDashboardCoordenador = async (req, res) => {
             [curso_id]
         );
 
-        // Total de alunos do curso
         const alunos = await pool.query(`
             SELECT COUNT(*) as total_alunos
             FROM usuarios
@@ -25,13 +23,11 @@ exports.getDashboardCoordenador = async (req, res) => {
             [curso_id]
         );
 
-        // Cursos ativos
         const cursos = await pool.query(`
             SELECT COUNT(*) as total_cursos
             FROM cursos`,
         );
 
-        // Envios por categoria
         const porCategoria = await pool.query(`
             SELECT 
                 r.nome_categoria as categoria,
@@ -45,7 +41,6 @@ exports.getDashboardCoordenador = async (req, res) => {
             [curso_id]
         );
 
-        // Cursos com mais envios
         const cursosMaisEnvios = await pool.query(`
             SELECT 
                 c.nome_curso,
@@ -58,7 +53,6 @@ exports.getDashboardCoordenador = async (req, res) => {
             LIMIT 5`
         );
 
-        // Últimas 5 atividades
         const ultimasAtividades = await pool.query(`
             SELECT 
                 a.id,
