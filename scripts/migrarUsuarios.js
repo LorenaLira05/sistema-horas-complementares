@@ -1,5 +1,9 @@
+require('dotenv').config({
+  path: require('path').resolve(__dirname, '../.env')
+});
+
 const pool = require('../src/config/database');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 async function migrarUsuarios() {
   try {
@@ -7,52 +11,51 @@ async function migrarUsuarios() {
 
     const senhaPadrao = await bcrypt.hash('123456', 10);
 
-    const students = await pool.query('SELECT id, email FROM students');
+    await pool.query('BEGIN');
 
-    for (const student of students.rows) {
+    const students = await pool.query(`
+      SELECT student_id, student_email
+      FROM atividades_complementares.students
+    `);
 
-      const existe = await pool.query(
-        'SELECT id FROM usuarios WHERE referencia_id = $1 AND perfil = $2',
-        [student.id, 'STUDENT']
-      );
+    for (const s of students.rows) {
+      const login = s.student_email?.trim()
+        ? s.student_email.trim()
+        : `student_${s.student_id}`;
 
-      if (existe.rows.length === 0) {
-        await pool.query(
-          'INSERT INTO usuarios (referencia_id, login, senha, perfil) VALUES ($1, $2, $3, $4)',
-          [student.id, student.email, senhaPadrao, 'STUDENT']
-        );
-      }
+      await pool.query(`
+        INSERT INTO atividades_complementares.users
+          (login, password_hash, role, student_id)
+        VALUES ($1, $2, 'STUDENT', $3)
+        ON CONFLICT (student_id) DO NOTHING
+      `, [login, senhaPadrao, s.student_id]);
+    }
+    
+    const coordinators = await pool.query(`
+      SELECT coordinator_id
+      FROM atividades_complementares.coordinators
+    `);
+
+    for (const c of coordinators.rows) {
+      const login = `coord_${c.coordinator_id}`;
+
+      await pool.query(`
+        INSERT INTO atividades_complementares.users
+          (login, password_hash, role, coordinator_id)
+        VALUES ($1, $2, 'COORDINATOR', $3)
+        ON CONFLICT (coordinator_id) DO NOTHING
+      `, [login, senhaPadrao, c.coordinator_id]);
     }
 
-    console.log('Students migrados com sucesso!');
+    await pool.query('COMMIT');
 
-    const coordinators = await pool.query('SELECT id FROM coordinators');
-
-    for (const coordinator of coordinators.rows) {
-
-      const existe = await pool.query(
-        'SELECT id FROM usuarios WHERE referencia_id = $1 AND perfil = $2',
-        [coordinator.id, 'COORDINATOR']
-      );
-
-      if (existe.rows.length === 0) {
-
-        const loginGerado = `coord_${coordinator.id}`;
-
-        await pool.query(
-          'INSERT INTO usuarios (login, senha, perfil, referencia_id) VALUES ($1, $2, $3, $4)',
-          [loginGerado, senhaPadrao, 'COORDINATOR', coordinator.id]
-        );
-      }
-    }
-
-    console.log('Coordinators migrados com sucesso.');
-    console.log('Migração finalizada.');
-
-    process.exit();
+    console.log('Migração concluída com sucesso!');
+    await pool.end();
+    process.exit(0);
 
   } catch (err) {
-    console.error("Erro na migração:", err);
+    await pool.query('ROLLBACK');
+    console.error('Erro na migração:', err);
     process.exit(1);
   }
 }
