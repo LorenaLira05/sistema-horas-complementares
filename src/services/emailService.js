@@ -11,18 +11,16 @@ const transporter = nodemailer.createTransport({
 });
 
 // E-mail para coordenador quando receber nova submissão
-exports.emailNovaSubmissao = async (emailCoordenador, nomeCoordenador, nomeAluno, descricao) => {
+exports.emailNovaSubmissao = async (emailCoordenador, tituloAtividade) => {
     try {
-        console.log("Enviando email para:", emailCoordenador);
         await transporter.sendMail({
             from: `"Sistema SENAC" <${process.env.MAIL_USER}>`,
             to: emailCoordenador,
             subject: 'Nova submissão de atividade complementar',
             html: `
                 <h2>Nova Submissão Recebida</h2>
-                <p>Olá, <strong>${nomeCoordenador}</strong>!</p>
-                <p>O aluno <strong>${nomeAluno}</strong> enviou uma nova atividade complementar:</p>
-                <p><strong>Descrição:</strong> ${descricao}</p>
+                <p>Uma nova atividade complementar foi submetida para avaliação:</p>
+                <p><strong>Título:</strong> ${tituloAtividade}</p>
                 <p>Acesse o sistema para analisar a submissão.</p>
                 <br>
                 <p>Sistema de Gestão de Atividades Complementares — SENAC</p>
@@ -34,10 +32,15 @@ exports.emailNovaSubmissao = async (emailCoordenador, nomeCoordenador, nomeAluno
     }
 };
 
-// E-mail para aluno após aprovação ou reprovação
-exports.emailResultadoSubmissao = async (emailAluno, nomeAluno, status, descricao, feedback) => {
-    const statusTexto = status === 'APROVADO' ? 'Aprovada' : 'Reprovada';
-    const corStatus = status === 'APROVADO' ? '#10b981' : '#ef4444';
+// E-mail para aluno após validação
+exports.emailResultadoSubmissao = async (emailAluno, nomeAluno, status, tituloAtividade, comment) => {
+    const statusMap = {
+        approved: { texto: 'Aprovada', cor: '#10b981' },
+        rejected: { texto: 'Reprovada', cor: '#ef4444' },
+        returned_for_adjustment: { texto: 'Devolvida para Ajuste', cor: '#f59e0b' }
+    };
+
+    const { texto: statusTexto, cor: corStatus } = statusMap[status] ?? { texto: status, cor: '#6b7280' };
 
     try {
         await transporter.sendMail({
@@ -48,9 +51,9 @@ exports.emailResultadoSubmissao = async (emailAluno, nomeAluno, status, descrica
                 <h2>Resultado da sua Submissão</h2>
                 <p>Olá, <strong>${nomeAluno}</strong>!</p>
                 <p>Sua atividade complementar foi analisada:</p>
-                <p><strong>Descrição:</strong> ${descricao}</p>
+                <p><strong>Título:</strong> ${tituloAtividade}</p>
                 <p><strong>Status:</strong> <span style="color:${corStatus}">${statusTexto}</span></p>
-                ${feedback ? `<p><strong>Feedback do coordenador:</strong> ${feedback}</p>` : ''}
+                ${comment ? `<p><strong>Comentário do coordenador:</strong> ${comment}</p>` : ''}
                 <br>
                 <p>Sistema de Gestão de Atividades Complementares — SENAC</p>
             `

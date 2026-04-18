@@ -15,16 +15,18 @@ const authMiddleware = (perfisPermitidos) => {
         }
 
         try {
-        
             const dados = jwt.verify(token, process.env.JWT_SECRET);
 
             req.usuario = dados;
-            
-            if (!perfisPermitidos.includes(dados.perfil)) {
+
+            // Checa se o usuário tem ao menos um dos perfis permitidos
+            const temPermissao = dados.perfis.some(p => perfisPermitidos.includes(p));
+
+            if (!temPermissao) {
                 return res.status(403).json({ erro: "Você não tem permissão para acessar esta área." });
             }
 
-            next(); 
+            next();
 
         } catch (err) {
             return res.status(401).json({ erro: "Token expirado ou inválido." });

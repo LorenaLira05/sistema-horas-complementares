@@ -1,79 +1,102 @@
 const pool = require('../config/database');
 
 exports.getDashboardCoordenador = async (req, res) => {
-    const curso_id = req.usuario.curso_id;
+    const user_id = req.usuario.id;
 
     try {
-        const metricas = await pool.query(`
-            SELECT
-                COUNT(*) FILTER (WHERE a.status = 'PENDENTE') as pendentes,
-                COUNT(*) FILTER (WHERE a.status = 'APROVADO') as aprovadas,
-                COUNT(*) FILTER (WHERE a.status = 'REJEITADO') as reprovadas,
-                ROUND(COALESCE(AVG(a.horas_aprovadas) FILTER (WHERE a.status = 'APROVADO'), 0), 1) as media_horas
-            FROM atividades_enviadas a
-            JOIN usuarios u ON a.aluno_id = u.id
-            WHERE u.curso_id = $1`,
-            [curso_id]
+        const cursosDoCoordenador = await pool.query(
+            `SELECT course_id FROM course_coordinators
+             WHERE user_id = $1 AND is_active = true`,
+            [user_id]
         );
 
-        const alunos = await pool.query(`
-            SELECT COUNT(*) as total_alunos
-            FROM usuarios
-            WHERE curso_id = $1 AND perfil = 'ALUNO'`,
-            [curso_id]
+        const course_ids = cursosDoCoordenador.rows.map(r => r.course_id);
+
+        if (course_ids.length === 0) {
+            return res.status(200).json({
+                metricas: { pendentes: 0, aprovadas: 0, reprovadas: 0, media_horas: 0 },
+                total_alunos: 0,
+                total_cursos: 0,
+                por_categoria: [],
+                cursos_mais_envios: [],
+                ultimas_atividades: []
+            });
+        }
+
+        const metricas = await pool.query(
+            `SELECT
+                COUNT(*) FILTER (WHERE s.status = 'submitted') AS pendentes,
+                COUNT(*) FILTER (WHERE s.status = 'approved') AS aprovadas,
+                COUNT(*) FILTER (WHERE s.status = 'rejected') AS reprovadas,
+                ROUND(COALESCE(AVG(s.approved_hours) FILTER (WHERE s.status = 'approved'), 0), 1) AS media_horas
+             FROM submissions s
+             JOIN user_courses uc ON uc.id = s.user_course_id
+             WHERE uc.course_id = ANY($1)`,
+            [course_ids]
         );
 
-        const cursos = await pool.query(`
-            SELECT COUNT(*) as total_cursos
-            FROM cursos`,
+        const alunos = await pool.query(
+            `SELECT COUNT(DISTINCT uc.user_id) AS total_alunos
+             FROM user_courses uc
+             JOIN user_roles ur ON ur.user_id = uc.user_id
+             JOIN roles r ON r.id = ur.role_id
+             WHERE uc.course_id = ANY($1)
+             AND r.name = 'student'
+             AND uc.is_active = true`,
+            [course_ids]
         );
 
-        const porCategoria = await pool.query(`
-            SELECT 
-                r.nome_categoria as categoria,
-                COUNT(*) as total
-            FROM atividades_enviadas a
-            JOIN regras_atividades r ON a.regra_id = r.id
-            JOIN usuarios u ON a.aluno_id = u.id
-            WHERE u.curso_id = $1
-            GROUP BY r.nome_categoria
-            ORDER BY total DESC`,
-            [curso_id]
+        const totalCursos = course_ids.length;
+
+        const porCategoria = await pool.query(
+            `SELECT
+                cat.name AS categoria,
+                COUNT(*) AS total
+             FROM submissions s
+             JOIN user_courses uc ON uc.id = s.user_course_id
+             JOIN categories cat ON cat.id = s.category_id
+             WHERE uc.course_id = ANY($1)
+             GROUP BY cat.name
+             ORDER BY total DESC`,
+            [course_ids]
         );
 
-        const cursosMaisEnvios = await pool.query(`
-            SELECT 
-                c.nome_curso,
-                COUNT(*) as total_envios
-            FROM atividades_enviadas a
-            JOIN usuarios u ON a.aluno_id = u.id
-            JOIN cursos c ON c.id = u.curso_id
-            GROUP BY c.nome_curso
-            ORDER BY total_envios DESC
-            LIMIT 5`
+        const cursosMaisEnvios = await pool.query(
+            `SELECT
+                c.name AS nome_curso,
+                COUNT(*) AS total_envios
+             FROM submissions s
+             JOIN user_courses uc ON uc.id = s.user_course_id
+             JOIN courses c ON c.id = uc.course_id
+             WHERE uc.course_id = ANY($1)
+             GROUP BY c.name
+             ORDER BY total_envios DESC
+             LIMIT 5`,
+            [course_ids]
         );
 
-        const ultimasAtividades = await pool.query(`
-            SELECT 
-                a.id,
-                a.descricao,
-                a.status,
-                a.data_envio,
-                u.nome as nome_aluno,
-                r.nome_categoria as categoria
-            FROM atividades_enviadas a
-            JOIN usuarios u ON a.aluno_id = u.id
-            LEFT JOIN regras_atividades r ON a.regra_id = r.id
-            WHERE u.curso_id = $1
-            ORDER BY a.data_envio DESC
-            LIMIT 5`,
-            [curso_id]
+        const ultimasAtividades = await pool.query(
+            `SELECT
+                s.id,
+                s.title,
+                s.status,
+                s.submitted_at,
+                u.full_name AS nome_aluno,
+                cat.name AS categoria
+             FROM submissions s
+             JOIN user_courses uc ON uc.id = s.user_course_id
+             JOIN users u ON u.id = uc.user_id
+             JOIN categories cat ON cat.id = s.category_id
+             WHERE uc.course_id = ANY($1)
+             ORDER BY s.submitted_at DESC
+             LIMIT 5`,
+            [course_ids]
         );
 
         res.status(200).json({
             metricas: metricas.rows[0],
-            total_alunos: alunos.rows[0].total_alunos,
-            total_cursos: cursos.rows[0].total_cursos,
+            total_alunos: parseInt(alunos.rows[0].total_alunos),
+            total_cursos: totalCursos,
             por_categoria: porCategoria.rows,
             cursos_mais_envios: cursosMaisEnvios.rows,
             ultimas_atividades: ultimasAtividades.rows

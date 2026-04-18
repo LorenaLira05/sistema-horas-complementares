@@ -113,15 +113,6 @@ Acesse: **http://localhost:3001**
 
 ---
 
-### 6. Iniciar o servidor
-```bash
-npm run dev
-```
-
-Acesse: **http://localhost:3001**
-
----
-
 ## Rotas da API
 
 ### Autenticação
@@ -160,17 +151,18 @@ Acesse: **http://localhost:3001**
 - [x] Regras de atividades por curso
 - [x] Validação e reprovação de submissões
 - [x] Segurança — coordenador acessa apenas seu próprio curso
-- [x] Dashboard de métricas
-- [x] Upload de certificados
-- [x] E-mails automáticos
-- [x] Filtros e paginação nas submissões
 - [x] Logs e rastreabilidade
+- [x] E-mails automáticos
+- [x] Upload de certificados
+- [x] Dashboard de métricas
+- [x] Filtros e paginação nas submissões
 
 ## Em Desenvolvimento
-- [ ] Frontend conectado ao backend
+- [ ] Frontend conectado ao backend 
 - [ ] OCR para leitura de certificados 
+
 ---
 
 ## Licença
 
-Este projeto foi desenvolvido para fins acadêmicos — SENAC 2026.
+Este projeto foi desenvolvido para fins acadêmicos

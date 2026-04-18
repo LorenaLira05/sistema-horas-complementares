@@ -1,12 +1,12 @@
 const pool = require('../config/database');
 
-const registrarLog = async (usuario_id, perfil, acao, detalhes, ip) => {
+const registrarLog = async (usuario_id, acao, entity_name, entity_id, details = {}) => {
     try {
         if (!usuario_id) return;
         await pool.query(
-            `INSERT INTO logs (usuario_id, perfil, acao, detalhes, ip) 
+            `INSERT INTO audit_logs (user_id, action, entity_name, entity_id, details)
              VALUES ($1, $2, $3, $4, $5)`,
-            [usuario_id, perfil, acao, detalhes, ip]
+            [usuario_id, acao, entity_name, entity_id, JSON.stringify(details)]
         );
     } catch (err) {
         console.error('Erro ao registrar log:', err.message);

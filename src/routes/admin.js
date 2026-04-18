@@ -1,18 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const authMiddleware = require('../middleware/auth');
-const adminController = require('../controllers/adminController'); 
+const adminController = require('../controllers/adminController');
 
-// para ver os cursos, precisa ser SUPER_ADMIN
-router.get('/cursos', authMiddleware(['SUPER_ADMIN']), adminController.getListaCursos);
-router.post('/coordenador', authMiddleware(['SUPER_ADMIN']), adminController.postCadastrarCoordenador);
-router.put('/curso/:id', authMiddleware(['SUPER_ADMIN']), adminController.putAtualizarCurso);           
+router.get('/cursos', authMiddleware(['super_admin']), adminController.getListaCursos);
+router.post('/curso', authMiddleware(['super_admin']), adminController.postCriarCurso);
+router.put('/curso/:id', authMiddleware(['super_admin']), adminController.putAtualizarCurso);
+router.delete('/curso/:id', authMiddleware(['super_admin']), adminController.deleteCurso);
 
-router.post('/curso', authMiddleware(['SUPER_ADMIN']), adminController.postCriarCurso);
-router.get('/coordenadores', authMiddleware(['SUPER_ADMIN']), adminController.getListaCoordenadores);
-router.put('/coordenador/:id', authMiddleware(['SUPER_ADMIN']), adminController.putAtualizarCoordenador);
-
-router.delete('/curso/:id', authMiddleware(['SUPER_ADMIN']), adminController.deleteCurso);
-router.delete('/coordenador/:id', authMiddleware(['SUPER_ADMIN']), adminController.deleteCoordenador);
+router.get('/coordenadores', authMiddleware(['super_admin']), adminController.getListaCoordenadores);
+router.post('/coordenador', authMiddleware(['super_admin']), adminController.postCadastrarCoordenador);
+router.put('/coordenador/:id', authMiddleware(['super_admin']), adminController.putAtualizarCoordenador);
+router.delete('/coordenador/:id', authMiddleware(['super_admin']), adminController.deleteCoordenador);
 
 module.exports = router;

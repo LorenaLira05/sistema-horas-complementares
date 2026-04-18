@@ -5,10 +5,14 @@ const alunoController = require('../controllers/alunoController');
 const uploadController = require('../controllers/uploadController');
 
 router.get('/teste', (req, res) => res.json({ msg: "Rota Aluno funcionando!" }));
-router.post('/submissao',authMiddleware(['ALUNO']), uploadController.upload.single('arquivo'), alunoController.postSubmeterAtividade);          
-router.put('/submissao/:id', authMiddleware(['ALUNO']), alunoController.putEditarSubmissao);      
-router.get('/submissoes', authMiddleware(['ALUNO']), alunoController.getMinhasSubmissoes);
-router.delete('/submissao/:id', authMiddleware(['ALUNO']), alunoController.deleteSubmissao);
 
+router.post('/submissao', authMiddleware(['student']), alunoController.postSubmeterAtividade);
+router.put('/submissao/:id', authMiddleware(['student']), alunoController.putEditarSubmissao);
+router.delete('/submissao/:id', authMiddleware(['student']), alunoController.deleteSubmissao);
+router.get('/submissoes', authMiddleware(['student']), alunoController.getMinhasSubmissoes);
 
-module.exports = router; 
+// Upload separado — permite anexar/atualizar arquivo independente da submissão
+router.post('/submissao/:submission_id/arquivo', authMiddleware(['student']), uploadController.uploadCertificado);
+router.get('/submissao/:submission_id/arquivo', authMiddleware(['student']), uploadController.getCertificado);
+
+module.exports = router;
