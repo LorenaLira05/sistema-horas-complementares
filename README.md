@@ -102,80 +102,9 @@ DB_PASSWORD=sua_senha
 JWT_SECRET=sua_chave_secreta
 ```
 
-### 4. Criar o banco de dados
-No pgAdmin ou psql:
-```sql
-CREATE DATABASE atividades_complementares;
-```
+### 4. Criar o banco de dados (Banco está no repositório banco_atividades_complementares)
 
-### 5. Criar as tabelas
-```sql
-CREATE TABLE cursos (
-    id SERIAL PRIMARY KEY,
-    nome_curso VARCHAR(255) NOT NULL,
-    sigla VARCHAR(20),
-    carga_horaria INTEGER,
-    duracao INTEGER
-);
-
-CREATE TABLE usuarios (
-    id SERIAL PRIMARY KEY,
-    nome VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    senha VARCHAR(255) NOT NULL,
-    perfil VARCHAR(50) NOT NULL,
-    curso_id INTEGER REFERENCES cursos(id),
-    matricula VARCHAR(50)
-);
-
-CREATE TABLE regras_atividades (
-    id SERIAL PRIMARY KEY,
-    curso_id INTEGER REFERENCES cursos(id),
-    nome_categoria VARCHAR(255) NOT NULL,
-    limite_horas INTEGER NOT NULL
-);
-
-CREATE TABLE atividades_enviadas (
-    id SERIAL PRIMARY KEY,
-    aluno_id INTEGER REFERENCES usuarios(id),
-    regra_id INTEGER REFERENCES regras_atividades(id),
-    curso_id INTEGER REFERENCES cursos(id),
-    descricao TEXT,
-    categoria VARCHAR(100),
-    horas_solicitadas INTEGER,
-    horas_aprovadas INTEGER,
-    status VARCHAR(50) DEFAULT 'PENDENTE',
-    feedback TEXT,
-    coordenador_id INTEGER REFERENCES usuarios(id),
-    data_envio TIMESTAMP DEFAULT NOW(),
-    data_validacao TIMESTAMP
-);
-
-CREATE TABLE certificados (
-    id SERIAL PRIMARY KEY,
-    atividade_id INTEGER REFERENCES atividades_enviadas(id),
-    nome_arquivo VARCHAR(255) NOT NULL,
-    caminho_arquivo VARCHAR(500) NOT NULL,
-    tipo_arquivo VARCHAR(50),
-    criado_em TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE coordenador_curso (
-    coordenador_id INTEGER REFERENCES usuarios(id),
-    curso_id INTEGER REFERENCES cursos(id),
-    PRIMARY KEY (coordenador_id, curso_id)
-);
-```
-
-### 6. Criar o primeiro Super Admin
-Com o servidor rodando, faça uma requisição POST:
-```
-POST http://localhost:3001/auth/setup
-Body: { "email": "admin@senac.br", "senha": "sua_senha" }
-```
-> ⚠️ Essa rota se desativa automaticamente após criar o primeiro Super Admin!
-
-### 7. Iniciar o servidor
+### 5. Iniciar o servidor
 ```bash
 npm run dev
 ```
@@ -222,19 +151,18 @@ Acesse: **http://localhost:3001**
 - [x] Regras de atividades por curso
 - [x] Validação e reprovação de submissões
 - [x] Segurança — coordenador acessa apenas seu próprio curso
+- [x] Logs e rastreabilidade
+- [x] E-mails automáticos
+- [x] Upload de certificados
+- [x] Dashboard de métricas
+- [x] Filtros e paginação nas submissões
 
 ## Em Desenvolvimento
-
-- [ ] Frontend conectado ao backend
-- [ ] Dashboard de métricas
-- [ ] Upload de certificados 
+- [ ] Frontend conectado ao backend 
 - [ ] OCR para leitura de certificados 
-- [ ] E-mails automáticos 
-- [ ] Logs e rastreabilidade 
-- [ ] Filtros e paginação nas submissões
 
 ---
 
 ## Licença
 
-Este projeto foi desenvolvido para fins acadêmicos — SENAC 2026.
+Este projeto foi desenvolvido para fins acadêmicos
