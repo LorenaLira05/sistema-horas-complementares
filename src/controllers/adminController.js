@@ -107,6 +107,17 @@ exports.postCadastrarCoordenador = async (req, res) => {
         departamento, cargo, data_nascimento, data_admissao, observacoes_internas
     } = req.body;
 
+     // Validações obrigatórias
+    if (!full_name || !email || !cpf) {
+        return res.status(400).json({ 
+            erro: "Campos obrigatórios: full_name, email, cpf." 
+        });
+    }
+    const cpfLimpo = cpf.replace(/\D/g, ''); // remove pontos e traços
+        if (cpfLimpo.length !== 11) {
+        return res.status(400).json({ erro: "CPF inválido." });
+    }
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');

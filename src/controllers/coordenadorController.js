@@ -114,6 +114,17 @@ exports.deleteRegra = async (req, res) => {
 exports.postCadastrarAluno = async (req, res) => {
     const { full_name, email, cpf, phone, course_id, ra, status_matricula } = req.body;
 
+    if (!full_name || !email || !cpf || !course_id || !ra) {
+        return res.status(400).json({ 
+            erro: "Campos obrigatórios: full_name, email, cpf, course_id, ra." 
+        });
+    }
+
+    const cpfLimpo = cpf.replace(/\D/g, ''); // remove pontos e traços
+        if (cpfLimpo.length !== 11) {
+        return res.status(400).json({ erro: "CPF inválido." });
+    }
+
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
