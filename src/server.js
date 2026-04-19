@@ -7,10 +7,10 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'frontend')));
+app.use(express.static(path.join(__dirname, '..', '..', 'frontend')));
 
 // Servir arquivos de upload estáticos
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 const rotasAuth = require('./routes/authRoutes');
 const rotasAdmin = require('./routes/admin');
@@ -25,7 +25,7 @@ app.use('/aluno', rotasAluno);
 app.use('/dashboard', rotasDashboard);
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'frontend', 'index.html'));
+    res.sendFile(path.join(__dirname, '..', '..', 'frontend','pages' ,'index.html'));
 });
 
 app.use((err, req, res, next) => {
