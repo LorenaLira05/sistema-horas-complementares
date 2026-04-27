@@ -50,6 +50,15 @@ exports.postCriarRegra = async (req, res) => {
 exports.getRegrasPorCurso = async (req, res) => {
     const { course_id } = req.params;
 
+    const acesso = await pool.query(
+        `SELECT id FROM course_coordinators 
+         WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
+        [req.usuario.id, course_id]
+    );
+    if (acesso.rows.length === 0) {
+        return res.status(403).json({ erro: "Você não tem acesso a este curso." });
+    }
+
     try {
         const resultado = await pool.query(
             `SELECT car.*, cat.name AS category_name, cat.description AS category_description
@@ -114,6 +123,15 @@ exports.deleteRegra = async (req, res) => {
 exports.postCadastrarAluno = async (req, res) => {
     const { full_name, email, cpf, phone, course_id, ra, status_matricula } = req.body;
 
+    const acesso = await pool.query(
+        `SELECT id FROM course_coordinators 
+         WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
+        [req.usuario.id, course_id]
+    );
+    if (acesso.rows.length === 0) {
+        return res.status(403).json({ erro: "Você não tem acesso a este curso." });
+    }
+    
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
@@ -157,6 +175,15 @@ exports.postCadastrarAluno = async (req, res) => {
 
 exports.getAlunosDoCurso = async (req, res) => {
     const { course_id } = req.params;
+
+    const acesso = await pool.query(
+        `SELECT id FROM course_coordinators 
+         WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
+        [req.usuario.id, course_id]
+    );
+    if (acesso.rows.length === 0) {
+        return res.status(403).json({ erro: "Você não tem acesso a este curso." });
+    }
 
     try {
         const resultado = await pool.query(
@@ -248,6 +275,15 @@ exports.getSubmissoes = async (req, res) => {
     const { status, pagina = 1 } = req.query;
     const itensPorPagina = 10;
     const offset = (pagina - 1) * itensPorPagina;
+
+    const acesso = await pool.query(
+        `SELECT id FROM course_coordinators 
+         WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
+        [req.usuario.id, course_id]
+    );
+    if (acesso.rows.length === 0) {
+        return res.status(403).json({ erro: "Você não tem acesso a este curso." });
+    }
 
     try {
         let params = [course_id];
