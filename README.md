@@ -156,10 +156,8 @@ Acesse: **http://localhost:3001**
 - [x] Upload de certificados
 - [x] Dashboard de métricas
 - [x] Filtros e paginação nas submissões
-
-## Em Desenvolvimento
-- [ ] Frontend conectado ao backend 
-- [ ] OCR para leitura de certificados 
+- [x] Frontend conectado ao backend 
+- [x] OCR para leitura de certificados 
 
 ---
 
