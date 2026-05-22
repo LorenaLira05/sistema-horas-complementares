@@ -242,21 +242,21 @@ exports.getMinhasSubmissoes = async (req, res) => {
 
 exports.getResumoHoras = async (req, res) => {
     const user_id = req.usuario.id;
-    try {
-        // 1. Pegar o curso do aluno
+      const { course_id } = req.params;
+     try {
         const userCourse = await pool.query(
             `SELECT uc.course_id, c.name as course_name, c.minimum_required_hours
              FROM user_courses uc
              JOIN courses c ON c.id = uc.course_id
-             WHERE uc.user_id = $1 AND uc.is_active = true`,
-            [user_id]
+             WHERE uc.user_id = $1 AND uc.course_id = $2 AND uc.is_active = true`,
+            [user_id, course_id]
         );
 
         if (userCourse.rows.length === 0) {
-            return res.status(404).json({ erro: "Aluno não vinculado a nenhum curso ativo." });
+            return res.status(404).json({ erro: "Aluno não matriculado neste curso." });
         }
 
-        const { course_id, minimum_required_hours } = userCourse.rows[0];
+        const { course_name, minimum_required_hours } = userCourse.rows[0];
 
         // 2. Pegar as regras (limites por categoria)
         const regras = await pool.query(
@@ -324,11 +324,18 @@ exports.getMeusDados = async (req, res) => {
     const user_id = req.usuario.id;
     try {
         const aluno = await pool.query(
-            `SELECT u.full_name as nome, u.email, c.name as curso_nome
+            `SELECT u.full_name as nome, u.email
              FROM users u
-             JOIN user_courses uc ON uc.user_id = u.id
+             WHERE u.id = $1`,
+            [user_id]
+        );
+
+        const cursos = await pool.query(
+            `SELECT c.id, c.name
+             FROM user_courses uc
              JOIN courses c ON c.id = uc.course_id
-             WHERE u.id = $1 AND uc.is_active = true`,
+             WHERE uc.user_id = $1 AND uc.is_active = true
+             ORDER BY c.name`,
             [user_id]
         );
 
@@ -345,6 +352,7 @@ exports.getMeusDados = async (req, res) => {
 
         res.status(200).json({
             aluno: aluno.rows[0],
+            cursos: cursos.rows, // <-- estava faltando no response
             total_submissoes: parseInt(stats.rows[0].total_submissoes) || 0,
             pendentes: parseInt(stats.rows[0].pendentes) || 0,
             horas_aprovadas: parseFloat(stats.rows[0].horas_aprovadas) || 0
