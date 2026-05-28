@@ -156,10 +156,9 @@ Acesse: **http://localhost:3001**
 - [x] Upload de certificados
 - [x] Dashboard de métricas
 - [x] Filtros e paginação nas submissões
+- [x] OCR para leitura de certificados
+- [x] Chaveamento de mútiplos cursos por alunos
 
-## Em Desenvolvimento
-- [ ] Frontend conectado ao backend 
-- [ ] OCR para leitura de certificados 
 
 ---
 
