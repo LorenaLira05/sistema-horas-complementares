@@ -7,6 +7,7 @@ from gerar_insights_categorias import processar_insights_categorias
 from classificacao_risco import classificar_risco_alunos
 from calcular_tempo_medio import calcular_metricas_tempo
 from gerar_recomendacoes import gerar_diretrizes_recomendacoes
+from gerar_insights_cursos import processar_insights_cursos
 
 def rodar_sistema_analitico_completo():
 
@@ -18,7 +19,6 @@ def rodar_sistema_analitico_completo():
     cursor = conexao.cursor()
     inicio_tempo = datetime.datetime.now()
     
-    # Cria o log inicial de execução do pipeline
     cursor.execute("""
         INSERT INTO pipeline_execucoes (nome_pipeline, status_execucao, inicio_execucao, quantidade_registros_lidos)
         VALUES (%s, %s, %s, %s) RETURNING id;
@@ -26,7 +26,6 @@ def rodar_sistema_analitico_completo():
     pipeline_id = cursor.fetchone()[0]
     conexao.commit()
 
-    # Listas mestras que vão acumular os dados de todos os scripts em memória
     todos_insights = []
     todas_recomendacoes = []
 
@@ -49,9 +48,14 @@ def rodar_sistema_analitico_completo():
         todos_insights.extend(ins_cat)
         todas_recomendacoes.extend(rec_cat)
         print("-" * 50)
+
+        print("Processando Visão por Curso...")
+        ins_cursos, rec_cursos = processar_insights_cursos()
+        todos_insights.extend(ins_cursos)
+        todas_recomendacoes.extend(rec_cursos)
         
         print("Executando Classificação de Risco...")
-        ins_risco, rec_risco = classificar_risco_alunos()
+        dados_riscos, ins_risco, rec_risco = classificar_risco_alunos()
         todos_insights.extend(ins_risco)
         todas_recomendacoes.extend(rec_risco)
         print("-" * 50)
@@ -108,7 +112,6 @@ def rodar_sistema_analitico_completo():
         print(f"Total de Recomendações salvas: {len(todas_recomendacoes)}")
         
     except Exception as e:
-        # Se qualquer script quebrar, desfaz tudo no banco para não gerar dados inconsistentes
         conexao.rollback()
         fim_tempo = datetime.datetime.now()
         
