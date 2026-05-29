@@ -1,4 +1,3 @@
-# scripts/gerar_insights.py
 import datetime
 from config_banco import ler_tabela_dataframe, obter_conexao
 
@@ -91,79 +90,4 @@ def processar_insights():
             "valor_numerico": float(total_geral)
         })
 
-    conexao = obter_conexao()
-    if conexao is None:
-        return
-            
-    cursor = conexao.cursor()
-    inicio_tempo = datetime.datetime.now()
-        
-    # Inicializa o log na tabela de auditoria pipeline_execucoes
-    cursor.execute("""
-        INSERT INTO pipeline_execucoes (nome_pipeline, status_execucao, inicio_execucao, quantidade_registros_lidos)
-        VALUES (%s, %s, %s, %s) RETURNING id;
-    """, ("Pipeline de Insights Institucionais", "em_andamento", inicio_tempo, total_geral))
-    pipeline_id = cursor.fetchone()[0]
-
-    try:
-        cursor.execute("DELETE FROM insights WHERE referencia_tipo = 'institucional';")
-        cursor.execute("DELETE FROM recomendacoes WHERE referencia_id = 0;")
-        
-        query_insert_insight = """
-            INSERT INTO insights (perfil_destino, referencia_tipo, referencia_id, tipo_insight, titulo, descricao, nivel_alerta, valor_numerico)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-        """
-        for ins in lista_insights:
-            cursor.execute(query_insert_insight, (
-                ins['perfil_destino'],       
-                ins['referencia_tipo'],     
-                ins['referencia_id'],        
-                ins['tipo_insight'],        
-                ins['titulo'],               
-                ins['descricao'],           
-                ins['nivel_alerta'],        
-                ins['valor_numerico']        
-            ))
-            
-        query_insert_recom = """
-            INSERT INTO recomendacoes (perfil_destino, referencia_id, nome_regra, titulo, recomendacao, motivo, prioridade)
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
-        """
-        for rec in lista_recomendacoes:
-            cursor.execute(query_insert_recom, (
-                rec['perfil_destino'], 
-                rec['referencia_id'], 
-                rec['nome_regra'],
-                rec['titulo'], 
-                rec['recomendacao'], 
-                rec['motivo'], 
-                rec['prioridade']
-            ))
-            
-        # Atualiza o fechamento da pipeline com status positivo
-        fim_tempo = datetime.datetime.now()
-        cursor.execute("""
-            UPDATE pipeline_execucoes 
-            SET status_execucao = 'sucesso', fim_execucao = %s, quantidade_registros_gravados = %s, mensagem = %s
-            WHERE id = %s;
-        """, (fim_tempo, len(lista_insights) + len(lista_recomendacoes), "Insights e recomendações calculados de forma autônoma.", pipeline_id))
-        
-        conexao.commit()
-        print(f" Sucesso! {len(lista_insights)} insights e {len(lista_recomendacoes)} recomendações salvos no PostgreSQL.")
-            
-    except Exception as e:
-        conexao.rollback()
-        fim_tempo = datetime.datetime.now()
-        cursor.execute("""
-            UPDATE pipeline_execucoes 
-            SET status_execucao = 'falha', fim_execucao = %s, mensagem = %s
-            WHERE id = %s;
-        """, (fim_tempo, f"Erro: {str(e)}", pipeline_id))
-        conexao.commit()
-        print(f"Erro interno durante a gravação: {e}")
-    finally:
-        cursor.close()
-        conexao.close()
-
-if __name__ == "__main__":
-    processar_insights()
+    return lista_insights, lista_recomendacoes

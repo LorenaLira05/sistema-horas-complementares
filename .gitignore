@@ -11,3 +11,4 @@ yarn.lock
 .env
 node_modules/
 uploads/
+__pycache__/
