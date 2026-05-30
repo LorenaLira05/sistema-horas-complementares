@@ -30,7 +30,6 @@ const upload = multer({
     limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-// Mapeia extensão para o enum file_type_enum do banco
 const getFileType = (originalname) => {
     const ext = path.extname(originalname).toLowerCase();
     if (ext === '.pdf') return 'pdf';
@@ -40,10 +39,11 @@ const getFileType = (originalname) => {
 
 /**
  * Processa e insere um único arquivo na tabela submission_files.
- * Reutilizado tanto no upload avulso quanto na criação com múltiplos arquivos.
+ * MODIFICADO: Agora adiciona os dados mastigados pela IA no retorno para o Front-end.
  */
 const processarEInserirArquivo = async (submissionId, file) => {
     const caminhoFisico = path.join(__dirname, '../../uploads', file.filename);
+    
     const resultadoOCR = await executarOCR(caminhoFisico, file.mimetype);
 
     const resultado = await pool.query(
@@ -58,18 +58,25 @@ const processarEInserirArquivo = async (submissionId, file) => {
             getFileType(file.originalname),
             file.mimetype,
             Math.round(file.size / 1024),
-            resultadoOCR.texto,
-            resultadoOCR.confianca
+            resultadoOCR.texto || resultadoOCR.textoBruto || '', // Compatibilidade caso usem .texto ou .textoBruto
+            resultadoOCR.confianca || 0
         ]
     );
 
-    return resultado.rows[0];
+    return {
+        ...resultado.rows[0],
+        dados_ia_extraidos: resultadoOCR.dados || {
+            titulo: "Não identificado",
+            instituicao: "Não identificada",
+            duracao: "Não identificada",
+            ano: "Não identificado"
+        }
+    };
 };
 
 /**
  * POST /aluno/submissao/:submission_id/arquivo
  * Upload avulso de múltiplos certificados para uma submissão já existente.
- * Aceita um ou vários arquivos no campo "certificados".
  */
 exports.uploadCertificado = [
     upload.array('certificados', 10),
@@ -109,7 +116,9 @@ exports.uploadCertificado = [
     }
 ];
 
-/*lista todos os arquivos de uma submissão*/
+/**
+ * GET /aluno/submissao/:submission_id/arquivos
+ */
 exports.getCertificado = async (req, res) => {
     const { submission_id } = req.params;
 
