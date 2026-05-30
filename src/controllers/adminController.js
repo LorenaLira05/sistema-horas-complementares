@@ -117,19 +117,8 @@ exports.deleteCurso = async (req, res) => {
 exports.getListaCoordenadores = async (req, res) => {
     try {
         const resultado = await pool.query(
-            `SELECT
-                u.id, u.full_name, u.email, u.phone, u.cpf, u.status,
-                cp.departamento, cp.cargo, cp.data_nascimento, cp.data_admissao, cp.observacoes_internas,
-                array_agg(DISTINCT c.id) FILTER (WHERE c.id IS NOT NULL) AS course_ids,
-                array_agg(DISTINCT c.name) FILTER (WHERE c.name IS NOT NULL) AS course_names
-             FROM users u
-             JOIN user_roles ur ON ur.user_id = u.id
-             JOIN roles r ON r.id = ur.role_id
-             LEFT JOIN coordinator_profiles cp ON cp.user_id = u.id
-             LEFT JOIN course_coordinators cc ON cc.user_id = u.id AND cc.is_active = true
-             LEFT JOIN courses c ON c.id = cc.course_id
-             WHERE r.name = 'coordinator'
-             GROUP BY u.id, cp.departamento, cp.cargo, cp.data_nascimento, cp.data_admissao, cp.observacoes_internas`
+            `SELECT *
+            FROM view_coordenadores;`
         );
         res.status(200).json(resultado.rows);
     } catch (err) {
@@ -292,5 +281,125 @@ exports.deleteCoordenador = async (req, res) => {
         res.status(200).json({ mensagem: "Coordenador deletado com sucesso!" });
     } catch (err) {
         res.status(500).json({ erro: err.message });
+    }
+};
+
+exports.getSubmissoesGeral = async (req, res) => {
+    const user_id = parseInt(req.usuario.id);
+    const { status, pagina = 1 } = req.query;
+
+    const itensPorPagina = 10;
+    const offset = (pagina - 1) * itensPorPagina;
+
+    try {
+        const isSuperAdmin =
+            req.usuario.perfis &&
+            req.usuario.perfis.includes('super_admin');
+
+        let course_ids = [];
+
+        if (isSuperAdmin) {
+            const todos = await pool.query(
+                `SELECT id
+                 FROM courses
+                 WHERE is_active = true`
+            );
+
+            course_ids = todos.rows.map(r => parseInt(r.id));
+        } else {
+            const cursos = await pool.query(
+                `SELECT course_id
+                 FROM course_coordinators
+                 WHERE user_id = $1
+                   AND is_active = true`,
+                [user_id]
+            );
+
+            course_ids = cursos.rows.map(r => parseInt(r.course_id));
+        }
+
+        if (course_ids.length === 0) {
+            return res.status(200).json({
+                submissoes: [],
+                contadores: {
+                    pendentes: 0,
+                    aprovadas: 0,
+                    reprovadas: 0,
+                    total: 0,
+                    total_cursos: 0
+                },
+                pagina: parseInt(pagina),
+                total_paginas: 0
+            });
+        }
+
+        let params = [course_ids];
+        let filtroStatus = '';
+
+        if (status && status === 'PENDENTE') {
+            filtroStatus = `
+                AND status NOT IN ('approved', 'rejected')
+            `;
+
+            params.push(itensPorPagina, offset);
+        } else if (status && status !== 'TODAS') {
+            filtroStatus = `
+                AND status = $2::submission_status_enum
+            `;
+
+            params.push(status, itensPorPagina, offset);
+        } else {
+            params.push(itensPorPagina, offset);
+        }
+
+        const resultado = await pool.query(
+            `SELECT *
+             FROM view_submissoes_completo
+             WHERE course_id = ANY($1)
+             ${filtroStatus}
+             ORDER BY submitted_at DESC
+             LIMIT $${params.length - 1}
+             OFFSET $${params.length}`,
+            params
+        );
+
+        const contadores = await pool.query(
+            `SELECT
+                COUNT(*) FILTER (
+                    WHERE status NOT IN ('approved', 'rejected')
+                ) AS pendentes,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'approved'
+                ) AS aprovadas,
+
+                COUNT(*) FILTER (
+                    WHERE status = 'rejected'
+                ) AS reprovadas,
+
+                COUNT(*) AS total,
+
+                COUNT(DISTINCT course_id) AS total_cursos
+
+             FROM view_submissoes_completo
+             WHERE course_id = ANY($1)`,
+            [course_ids]
+        );
+
+        res.status(200).json({
+            submissoes: resultado.rows,
+            contadores: contadores.rows[0],
+            pagina: parseInt(pagina),
+            total_paginas: Math.ceil(
+                contadores.rows[0].total / itensPorPagina
+            )
+        });
+
+    } catch (err) {
+        console.error('Erro em getSubmissoesGeral:', err);
+
+        res.status(500).json({
+            erro: err.message
+        });
     }
 };

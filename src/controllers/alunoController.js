@@ -223,28 +223,11 @@ exports.getMinhasSubmissoes = async (req, res) => {
         }
 
         const resultado = await pool.query(
-            `SELECT
-                s.*,
-                c.name AS course_name,
-                cat.name AS category_name,
-                JSON_AGG(
-                    JSON_BUILD_OBJECT(
-                        'id', sf.id,
-                        'original_filename', sf.original_filename,
-                        'storage_path', sf.storage_path,
-                        'ocr_confidence', sf.ocr_confidence,
-                        'uploaded_at', sf.uploaded_at
-                    )
-                ) FILTER (WHERE sf.id IS NOT NULL) AS arquivos
-             FROM submissions s
-             JOIN user_courses uc ON uc.id = s.user_course_id
-             JOIN courses c ON c.id = uc.course_id
-             JOIN categories cat ON cat.id = s.category_id
-             LEFT JOIN submission_files sf ON sf.submission_id = s.id
-             WHERE uc.user_id = $1
+            `SELECT *
+             FROM view_submissoes_alunos
+             WHERE user_id = $1
              ${filtros}
-             GROUP BY s.id, c.name, cat.name
-             ORDER BY s.submitted_at DESC`,
+             ORDER BY submitted_at DESC`,
             params
         );
 
@@ -343,11 +326,8 @@ exports.getMeusDados = async (req, res) => {
         );
 
         const cursos = await pool.query(
-            `SELECT c.id, c.name
-             FROM user_courses uc
-             JOIN courses c ON c.id = uc.course_id
-             WHERE uc.user_id = $1 AND uc.is_active = true
-             ORDER BY c.name`,
+            `SELECT * FROM view_cursos_por_usuario
+             WHERE user_id = $1`,
             [user_id]
         );
 

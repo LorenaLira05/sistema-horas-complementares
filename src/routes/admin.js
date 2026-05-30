@@ -8,7 +8,7 @@ router.post('/curso', authMiddleware(['super_admin']), adminController.postCriar
 router.put('/curso/:id', authMiddleware(['super_admin']), adminController.putAtualizarCurso);
 router.delete('/curso/:id', authMiddleware(['super_admin']), adminController.deleteCurso);
 router.get('/curso/:course_id/coordenador', authMiddleware(['super_admin']), adminController.getCoordenadorPorCurso);
-
+router.get('/submissoes', authMiddleware(['super_admin']), adminController.getSubmissoesGeral);
 router.get('/coordenadores', authMiddleware(['super_admin']), adminController.getListaCoordenadores);
 router.post('/coordenador', authMiddleware(['super_admin']), adminController.postCadastrarCoordenador);
 router.put('/coordenador/:id', authMiddleware(['super_admin']), adminController.putAtualizarCoordenador);
