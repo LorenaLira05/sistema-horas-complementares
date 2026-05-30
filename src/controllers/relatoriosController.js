@@ -32,18 +32,17 @@ exports.getRelatorios = async (req, res) => {
         if (course_ids.length === 0) {
             return res.status(200).json({
                 total_horas: 0,
-                eficiencia: {
-                    total: 0,
-                    aprovadas: 0,
-                    eficiencia_percentual: 0
-                },
+                eficiencia: { total: 0, aprovadas: 0, eficiencia_percentual: 0 },
                 horas_mensais: [],
                 eficiencia_por_curso: [],
                 log_atividades: [],
-                avaliacao_alunos: []
+                avaliacao_alunos: [],
+                insights_detalhados: [],
+                resumo_risco_cursos: []
             });
         }
 
+        // CONSULTAS DE HISTÓRICO E OPERAÇÕES (Originais do seu código)
         const relatorioGeral = await pool.query(
             `SELECT
                 COALESCE(SUM(total_horas_aprovadas), 0) AS total_horas,
@@ -114,28 +113,50 @@ exports.getRelatorios = async (req, res) => {
             [course_ids]
         );
 
+        //  NOVAS CONSULTAS DA PIPELINE PYTHON (Foco em Relatório Acadêmico)
+        
+        // Puxa todos os insights gerados para auditoria da coordenação
+        const insightsPipeline = await pool.query(
+            `SELECT tipo_insight, titulo, descricao, nivel_alerta, valor_numerico 
+             FROM insights
+             WHERE (referencia_tipo = 'curso' AND referencia_id = ANY($1))
+                OR (referencia_tipo = 'aluno' AND referencia_id IN (
+                    SELECT user_id FROM user_courses WHERE course_id = ANY($1)
+                ))
+             ORDER BY nivel_alerta DESC, tipo_insight;`,
+            [course_ids]
+        );
+
+        const riscoPorCursoPipeline = await pool.query(
+            `SELECT 
+                c.name AS nome_curso,
+                cr.nivel_risco,
+                COUNT(*)::int AS total_alunos
+             FROM classificacao_risco cr
+             JOIN courses c ON c.id = cr.course_id
+             WHERE cr.course_id = ANY($1)
+             GROUP BY c.name, cr.nivel_risco
+             ORDER BY c.name, cr.nivel_risco;`,
+            [course_ids]
+        );
+
         res.status(200).json({
             total_horas: relatorioGeral.rows[0].total_horas,
-
             eficiencia: {
                 total: relatorioGeral.rows[0].total,
                 aprovadas: relatorioGeral.rows[0].aprovadas,
-                eficiencia_percentual:
-                    relatorioGeral.rows[0].eficiencia_percentual
+                eficiencia_percentual: relatorioGeral.rows[0].eficiencia_percentual
             },
-
             horas_mensais: horasMensais.rows,
-
             eficiencia_por_curso: eficienciaPorCurso.rows,
-
             log_atividades: logAtividades.rows,
-
-            avaliacao_alunos: avaliacaoAlunos.rows
+            avaliacao_alunos: avaliacaoAlunos.rows,
+            insights_detalhados: insightsPipeline.rows,
+            resumo_risco_cursos: riscoPorCursoPipeline.rows
         });
 
     } catch (err) {
         console.error('Erro Relatórios:', err);
-
         res.status(500).json({
             erro: err.message
         });

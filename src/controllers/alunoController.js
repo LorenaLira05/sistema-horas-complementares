@@ -29,16 +29,21 @@ exports.postSubmeterAtividade = async (req, res) => {
             erro: 'É obrigatório enviar ao menos um arquivo de certificado.'
         });
     }
+    
+    const client = await pool.connect();
 
     try {
-        // Verifica matrícula ativa
-        const userCourse = await pool.query(
+        await client.query('BEGIN');
+
+        const userCourse = await client.query(
             `SELECT id FROM user_courses
              WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
             [user_id, course_id]
         );
 
         if (userCourse.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(403).json({
                 erro: 'Você não está matriculado neste curso.'
             });
@@ -46,21 +51,21 @@ exports.postSubmeterAtividade = async (req, res) => {
 
         const user_course_id = userCourse.rows[0].id;
 
-        // Verifica se a categoria é permitida para o curso
-        const regra = await pool.query(
+        const regra = await client.query(
             `SELECT * FROM course_activity_rules
              WHERE course_id = $1 AND category_id = $2`,
             [course_id, category_id]
         );
 
         if (regra.rows.length === 0) {
+            await client.query('ROLLBACK');
+            client.release();
             return res.status(404).json({
                 erro: 'Categoria não permitida para este curso.'
             });
         }
 
-        // Cria a submissão
-        const resultado = await pool.query(
+        const resultado = await client.query(
             `INSERT INTO submissions
              (user_course_id, category_id, title, description,
               institution_name, certificate_number, organizer_name,
@@ -82,13 +87,16 @@ exports.postSubmeterAtividade = async (req, res) => {
 
         const submissao = resultado.rows[0];
 
-        // Processa todos os arquivos em paralelo (OCR + inserção)
         const arquivosInseridos = await Promise.all(
             arquivos.map(file => processarEInserirArquivo(submissao.id, file))
         );
 
-        // Notifica coordenadores do curso
-        const coordenadores = await pool.query(
+        const erroCriticoIA = arquivosInseridos.some(arq => arq.erro || !arq.dados_ia_extraidos);
+        if (erroCriticoIA) {
+            throw new Error('Falha crítica no processamento inteligente dos certificados. Envio cancelado.');
+        }
+
+        const coordenadores = await client.query(
             `SELECT u.id, u.email, u.full_name
              FROM course_coordinators cc
              JOIN users u ON u.id = cc.user_id
@@ -97,9 +105,7 @@ exports.postSubmeterAtividade = async (req, res) => {
         );
 
         for (const coord of coordenadores.rows) {
-            await emailNovaSubmissao(coord.email, title);
-
-            await pool.query(
+            await client.query(
                 `INSERT INTO notifications (user_id, submission_id, type, title, message)
                  VALUES ($1, $2, 'submission_created', $3, $4)`,
                 [
@@ -110,10 +116,18 @@ exports.postSubmeterAtividade = async (req, res) => {
                 ]
             );
         }
-
+        
         await registrarLog(req.usuario.id, 'CRIAR_SUBMISSAO', 'submissions', submissao.id, {
             title, course_id, category_id, total_arquivos: arquivosInseridos.length
         });
+
+        await client.query('COMMIT');
+
+        for (const coord of coordenadores.rows) {
+            emailNovaSubmissao(coord.email, title).catch(err => 
+                console.error(`[Aviso] Falha ao enviar e-mail para ${coord.email}:`, err.message)
+            );
+        }
 
         res.status(201).json({
             mensagem: 'Atividade submetida com sucesso!',
@@ -122,7 +136,16 @@ exports.postSubmeterAtividade = async (req, res) => {
         });
 
     } catch (err) {
-        res.status(500).json({ erro: err.message });
+        await client.query('ROLLBACK');
+        console.error("Transação abortada devido ao erro:", err.message);
+        
+        res.status(500).json({ 
+            erro: 'Não foi possível processar a sua submissão.', 
+            detalhe: err.message 
+        });
+        
+    } finally {
+        client.release();
     }
 };
 

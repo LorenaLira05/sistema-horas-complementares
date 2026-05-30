@@ -15,7 +15,6 @@ exports.getDashboardCoordenador = async (req, res) => {
                  FROM courses
                  WHERE is_active = true`
             );
-
             course_ids = todosCursos.rows.map(r => r.id);
         } else {
             const cursosDoCoordenador = await pool.query(
@@ -25,23 +24,21 @@ exports.getDashboardCoordenador = async (req, res) => {
                    AND is_active = true`,
                 [user_id]
             );
-
             course_ids = cursosDoCoordenador.rows.map(r => r.course_id);
         }
 
+        // Se o coordenador não gerencia nenhum curso, retorna estrutura analítica zerada
         if (course_ids.length === 0) {
             return res.status(200).json({
-                metricas: {
-                    pendentes: 0,
-                    aprovadas: 0,
-                    reprovadas: 0,
-                    media_horas: 0
-                },
+                metricas: { pendentes: 0, aprovadas: 0, reprovadas: 0, media_horas: 0 },
                 total_alunos: 0,
                 total_cursos: 0,
                 por_categoria: [],
                 cursos_mais_envios: [],
-                ultimas_atividades: []
+                ultimas_atividades: [],
+                insights: [],
+                recomendacoes: [],
+                resumoRisco: []
             });
         }
 
@@ -102,6 +99,40 @@ exports.getDashboardCoordenador = async (req, res) => {
             [course_ids]
         );
 
+        // novas queries analiticas (python) 
+        
+        const insightsPipeline = await pool.query(
+            `SELECT id, perfil_destino, referencia_tipo, referencia_id, 
+                    tipo_insight, titulo, descricao, nivel_alerta, valor_numerico 
+             FROM insights
+             WHERE (referencia_tipo = 'curso' AND referencia_id = ANY($1))
+                OR (referencia_tipo = 'aluno' AND referencia_id IN (
+                    SELECT user_id FROM user_courses WHERE course_id = ANY($1)
+                ))
+                OR (perfil_destino = 'superadmin' AND $2 = true);`,
+            [course_ids, isSuperAdmin]
+        );
+
+        // Recomendações geradas para alunos que pertencem aos cursos do coordenador
+        const recomendacoesPipeline = await pool.query(
+            `SELECT id, perfil_destino, referencia_id, nome_regra, titulo, recomendacao, motivo, prioridade 
+             FROM recomendacoes
+             WHERE (perfil_destino = 'aluno' AND referencia_id IN (
+                 SELECT user_id FROM user_courses WHERE course_id = ANY($1)
+             ))
+             OR (perfil_destino = 'superadmin' AND $2 = true);`,
+            [course_ids, isSuperAdmin]
+        );
+
+        // Distribuição consolidada de risco dos alunos para alimentar gráficos de pizza/rosca
+        const resumoRiscoPipeline = await pool.query(
+            `SELECT nivel_risco, COUNT(*)::int as quantidade 
+             FROM classificacao_risco
+             WHERE course_id = ANY($1)
+             GROUP BY nivel_risco;`,
+            [course_ids]
+        );
+
         res.status(200).json({
             metricas: {
                 pendentes: parseInt(metricas.rows[0].pendentes || 0),
@@ -109,18 +140,15 @@ exports.getDashboardCoordenador = async (req, res) => {
                 reprovadas: parseInt(metricas.rows[0].reprovadas || 0),
                 media_horas: parseFloat(metricas.rows[0].media_horas || 0)
             },
-
-            total_alunos: parseInt(
-                alunos.rows[0].total_alunos || 0
-            ),
-
+            total_alunos: parseInt(alunos.rows[0].total_alunos || 0),
             total_cursos: course_ids.length,
-
             por_categoria: porCategoria.rows,
-
             cursos_mais_envios: cursosMaisEnvios.rows,
+            ultimas_atividades: ultimasAtividades.rows,
 
-            ultimas_atividades: ultimasAtividades.rows
+            insights: insightsPipeline.rows,
+            recomendacoes: recomendacoesPipeline.rows,
+            resumoRisco: resumoRiscoPipeline.rows
         });
 
     } catch (err) {
