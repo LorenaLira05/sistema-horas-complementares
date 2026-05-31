@@ -8,6 +8,7 @@ from classificacao_risco import classificar_risco_alunos
 from calcular_tempo_medio import calcular_metricas_tempo
 from gerar_recomendacoes import gerar_diretrizes_recomendacoes
 from gerar_insights_cursos import processar_insights_cursos
+from gerar_insights_ia import gerar_e_salvar_insights_ia
 
 def rodar_sistema_analitico_completo():
 
@@ -49,11 +50,20 @@ def rodar_sistema_analitico_completo():
         todas_recomendacoes.extend(rec_cat)
         print("-" * 50)
 
-        print("Processando Visão por Curso...")
+        print("Processando Visão por Curso (pandas)")
         ins_cursos, rec_cursos = processar_insights_cursos()
         todos_insights.extend(ins_cursos)
         todas_recomendacoes.extend(rec_cursos)
-        
+        print("-" * 50)
+
+        print("Gerando Insights IA...")
+        try:
+            insights_da_ia = gerar_e_salvar_insights_ia(ins_cursos)
+            todos_insights.extend(insights_da_ia)
+        except Exception as ia_err:
+            print(f"[Aviso IA] Falha não impeditiva ao gerar insights com Groq: {ia_err}")
+        print("-" * 50)
+
         print("Executando Classificação de Risco...")
         dados_riscos, ins_risco, rec_risco = classificar_risco_alunos()
         todos_insights.extend(ins_risco)

@@ -1,4 +1,6 @@
 const pool = require('../config/database');
+const { exec } = require('child_process');
+const path = require('path');
 
 exports.getDashboardCoordenador = async (req, res) => {
     const user_id = parseInt(req.usuario.id);
@@ -100,7 +102,6 @@ exports.getDashboardCoordenador = async (req, res) => {
         );
 
         // novas queries analiticas (python) 
-        
         const insightsPipeline = await pool.query(
             `SELECT id, perfil_destino, referencia_tipo, referencia_id, 
                     tipo_insight, titulo, descricao, nivel_alerta, valor_numerico 
@@ -156,5 +157,90 @@ exports.getDashboardCoordenador = async (req, res) => {
         res.status(500).json({
             erro: err.message
         });
+    }
+};
+
+exports.postAtualizarInsightSobDemanda = async (req, res) => {
+    const course_id = parseInt(req.params.course_id);
+    const user_id = parseInt(req.usuario.id); 
+
+    try {
+        // verifica se é Admin Global
+        const isSuperAdmin = req.usuario.perfis && req.usuario.perfis.includes('super_admin');
+        
+        if (!isSuperAdmin) {
+            // Se não for Admin Global, valida se o coordenador de fato gerencia o curso solicitado
+            const permissao = await pool.query(
+                `SELECT 1 FROM course_coordinators 
+                 WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
+                [user_id, course_id]
+            );
+
+            if (permissao.rows.length === 0) {
+                return res.status(403).json({ erro: "Acesso negado: Você não coordena este curso." });
+            }
+        }
+
+        // 2. Busca o nome real do curso para contextualizar o prompt da IA
+        const dadosCurso = await pool.query(
+            `SELECT name FROM courses WHERE id = $1`, [course_id]
+        );
+
+        if (dadosCurso.rows.length === 0) {
+            return res.status(404).json({ erro: "Curso não encontrado no sistema." });
+        }
+        const nomeCurso = dadosCurso.rows[0].name;
+
+        const metricasBanco = await pool.query(
+            `SELECT
+                COUNT(*) FILTER (WHERE status NOT IN ('approved', 'rejected')) AS pendentes,
+                COUNT(*) FILTER (WHERE status = 'approved') AS aprovadas,
+                COUNT(*) FILTER (WHERE status = 'rejected') AS reprovadas
+             FROM view_submissoes_completo
+             WHERE course_id = $1`,
+            [course_id]
+        );
+
+        const m = metricasBanco.rows[0];
+        const resumoMetricas = `O curso possui atualmente ${m.pendentes || 0} submissoes aguardando avaliacao, ${m.aprovadas || 0} aprovadas e ${m.reprovadas || 0} rejeitadas.`;
+
+        const scriptPath = path.join(__dirname, '../scripts/gerar_insights_ia.py');
+
+        console.log(`[Node API] Chamando motor de IA para o curso: ${nomeCurso} (ID: ${course_id})`);
+
+        const nomeCursoLimpo = nomeCurso.replace(/"/g, '\\"');
+        const resumoMetricasLimpo = resumoMetricas.replace(/"/g, '\\"');
+
+
+        // Une as credenciais do seu .env mapeando-as no padrão esperado pelo Python
+        const stringConexaoPostgres = `postgresql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`;
+
+        exec(`python "${scriptPath}" ${course_id} "${nomeCursoLimpo}" "${resumoMetricasLimpo}"`, 
+        {
+            env: {
+                ...process.env,
+                DATABASE_URL: stringConexaoPostgres
+            }
+        },
+        (error, stdout, stderr) => {
+            if (error) {
+                console.error(`[Node API] Erro crítico ao executar script Python: ${error.message}`);
+                return res.status(500).json({ erro: "Erro ao processar o motor analítico de IA." });
+            }
+            
+            console.log(`[Node API] Saída do Python:\n${stdout}`);
+            if (stderr) {
+                console.warn(`[Node API] Avisos secundários do Python:\n${stderr}`);
+            }
+
+            return res.status(200).json({ 
+                sucesso: true, 
+                mensagem: `O insight cognitivo para o curso "${nomeCurso}" foi gerado e salvo via IA com dados reais.` 
+            });
+        });
+
+    } catch (err) {
+        console.error('Erro no controller de insights sob demanda:', err);
+        return res.status(500).json({ erro: err.message });
     }
 };

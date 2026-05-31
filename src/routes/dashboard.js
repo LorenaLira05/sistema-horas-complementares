@@ -6,5 +6,6 @@ const relatoriosController = require('../controllers/relatoriosController');
 
 router.get('/coordenador', authMiddleware(['coordinator', 'super_admin']), dashboardController.getDashboardCoordenador);
 router.get('/relatorios', authMiddleware(['coordinator', 'super_admin']), relatoriosController.getRelatorios);
+router.post('/insights/atualizar/:course_id', authMiddleware(['coordinator', 'super_admin']), dashboardController.postAtualizarInsightSobDemanda);
 
 module.exports = router;
