@@ -8,49 +8,105 @@ const storage = multer.diskStorage({
         cb(null, 'uploads/');
     },
     filename: (req, file, cb) => {
-        const nomeUnico = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+        const nomeUnico =
+            `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
+
         cb(null, nomeUnico);
     }
 });
 
 const fileFilter = (req, file, cb) => {
     const extensao = path.extname(file.originalname).toLowerCase();
-    const extensoesPermitidas = ['.jpg', '.jpeg', '.png', '.pdf'];
+
+    const extensoesPermitidas = [
+        '.jpg',
+        '.jpeg',
+        '.png',
+        '.pdf'
+    ];
 
     if (extensoesPermitidas.includes(extensao)) {
         cb(null, true);
     } else {
-        cb(new Error('Tipo de arquivo não permitido. Use JPG, PNG ou PDF.'), false);
+        cb(
+            new Error(
+                'Tipo de arquivo não permitido. Use JPG, PNG ou PDF.'
+            ),
+            false
+        );
     }
 };
 
 const upload = multer({
     storage,
     fileFilter,
-    limits: { fileSize: 5 * 1024 * 1024 }
+    limits: {
+        fileSize: 5 * 1024 * 1024
+    }
 });
 
-const getFileType = (originalname) => {
+function getFileType(originalname) {
     const ext = path.extname(originalname).toLowerCase();
+
     if (ext === '.pdf') return 'pdf';
-    if (['.jpg', '.jpeg', '.png'].includes(ext)) return 'image';
+
+    if (
+        ext === '.jpg' ||
+        ext === '.jpeg' ||
+        ext === '.png'
+    ) {
+        return 'image';
+    }
+
     return 'other';
-};
+}
 
 /**
- * Processa e insere um único arquivo na tabela submission_files.
- * MODIFICADO: Agora adiciona os dados mastigados pela IA no retorno para o Front-end.
+ * Utilizada dentro da criação da submissão
+ * usando a mesma transação (client).
  */
-const processarEInserirArquivo = async (submissionId, file) => {
-    const caminhoFisico = path.join(__dirname, '../../uploads', file.filename);
-    
-    const resultadoOCR = await executarOCR(caminhoFisico, file.mimetype);
+const processarEInserirArquivo = async (
+    client,
+    submissionId,
+    file
+) => {
+    const caminhoFisico = path.join(
+        __dirname,
+        '../../uploads',
+        file.filename
+    );
 
-    const resultado = await pool.query(
-        `INSERT INTO submission_files
-        (submission_id, original_filename, storage_path, file_type, mime_type, file_size_kb, ocr_extracted_text, ocr_confidence)
-        VALUES ($1, $2, $3, $4::file_type_enum, $5, $6, $7, $8)
-        RETURNING *`,
+    const resultadoOCR = await executarOCR(
+        caminhoFisico,
+        file.mimetype
+    );
+
+    const resultado = await client.query(
+        `
+        INSERT INTO submission_files
+        (
+            submission_id,
+            original_filename,
+            storage_path,
+            file_type,
+            mime_type,
+            file_size_kb,
+            ocr_extracted_text,
+            ocr_confidence
+        )
+        VALUES
+        (
+            $1,
+            $2,
+            $3,
+            $4::file_type_enum,
+            $5,
+            $6,
+            $7,
+            $8
+        )
+        RETURNING *
+        `,
         [
             submissionId,
             file.originalname,
@@ -58,88 +114,126 @@ const processarEInserirArquivo = async (submissionId, file) => {
             getFileType(file.originalname),
             file.mimetype,
             Math.round(file.size / 1024),
-            resultadoOCR.texto || resultadoOCR.textoBruto || '', // Compatibilidade caso usem .texto ou .textoBruto
+            resultadoOCR.texto ||
+                resultadoOCR.textoBruto ||
+                '',
             resultadoOCR.confianca || 0
         ]
     );
 
     return {
         ...resultado.rows[0],
-        dados_ia_extraidos: resultadoOCR.dados || {
-            titulo: "Não identificado",
-            instituicao: "Não identificada",
-            duracao: "Não identificada",
-            ano: "Não identificado"
-        }
+        dados_ia_extraidos:
+            resultadoOCR.dados || {
+                titulo: 'Não identificado',
+                instituicao: 'Não identificada',
+                duracao: 'Não identificada',
+                ano: 'Não identificado'
+            }
     };
 };
 
 /**
  * POST /aluno/submissao/:submission_id/arquivo
- * Upload avulso de múltiplos certificados para uma submissão já existente.
  */
 exports.uploadCertificado = [
     upload.array('certificados', 10),
+
     async (req, res) => {
         const { submission_id } = req.params;
 
         if (!req.files || req.files.length === 0) {
-            return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
+            return res.status(400).json({
+                erro: 'Nenhum arquivo enviado.'
+            });
         }
 
+        const client = await pool.connect();
+
         try {
-            // Verifica se a submissão existe e pertence ao aluno autenticado
-            const submissao = await pool.query(
-                `SELECT s.id FROM submissions s
-                 JOIN user_courses uc ON uc.id = s.user_course_id
-                 WHERE s.id = $1 AND uc.user_id = $2`,
-                [submission_id, req.usuario.id]
+            const submissao = await client.query(
+                `
+                SELECT s.id
+                FROM submissions s
+                JOIN user_courses uc
+                    ON uc.id = s.user_course_id
+                WHERE s.id = $1
+                  AND uc.user_id = $2
+                `,
+                [
+                    submission_id,
+                    req.usuario.id
+                ]
             );
 
             if (submissao.rows.length === 0) {
-                return res.status(404).json({ erro: 'Submissão não encontrada.' });
+                return res.status(404).json({
+                    erro: 'Submissão não encontrada.'
+                });
             }
 
-            // Processa todos os arquivos em paralelo
-            const arquivosInseridos = await Promise.all(
-                req.files.map(file => processarEInserirArquivo(submission_id, file))
-            );
+            const arquivosInseridos =
+                await Promise.all(
+                    req.files.map(file =>
+                        processarEInserirArquivo(
+                            client,
+                            submission_id,
+                            file
+                        )
+                    )
+                );
 
             res.status(201).json({
-                mensagem: `${arquivosInseridos.length} certificado(s) enviado(s) com sucesso!`,
+                mensagem:
+                    `${arquivosInseridos.length} certificado(s) enviado(s) com sucesso!`,
                 arquivos: arquivosInseridos
             });
 
         } catch (err) {
-            res.status(500).json({ erro: err.message });
+            console.error(err);
+
+            res.status(500).json({
+                erro: err.message
+            });
+        } finally {
+            client.release();
         }
     }
 ];
 
 /**
- * GET /aluno/submissao/:submission_id/arquivos
+ * GET /aluno/submissao/:submission_id/arquivo
  */
 exports.getCertificado = async (req, res) => {
     const { submission_id } = req.params;
 
     try {
         const resultado = await pool.query(
-            `SELECT * FROM submission_files
-             WHERE submission_id = $1
-             ORDER BY uploaded_at DESC`,
+            `
+            SELECT *
+            FROM submission_files
+            WHERE submission_id = $1
+            ORDER BY uploaded_at DESC
+            `,
             [submission_id]
         );
 
         if (resultado.rows.length === 0) {
-            return res.status(404).json({ erro: 'Nenhum arquivo encontrado.' });
+            return res.status(404).json({
+                erro: 'Nenhum arquivo encontrado.'
+            });
         }
 
-        res.status(200).json(resultado.rows);
+        res.status(200).json(
+            resultado.rows
+        );
 
     } catch (err) {
-        res.status(500).json({ erro: err.message });
+        res.status(500).json({
+            erro: err.message
+        });
     }
 };
 
 module.exports.upload = upload;
-module.exports.processarEInserirArquivo = processarEInserirArquivo;
+module.exports.processarEInserirArquivo =processarEInserirArquivo;

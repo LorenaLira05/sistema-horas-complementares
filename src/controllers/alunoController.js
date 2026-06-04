@@ -87,9 +87,15 @@ exports.postSubmeterAtividade = async (req, res) => {
 
         const submissao = resultado.rows[0];
 
-        const arquivosInseridos = await Promise.all(
-            arquivos.map(file => processarEInserirArquivo(submissao.id, file))
-        );
+       const arquivosInseridos = await Promise.all(
+        arquivos.map(file =>
+            processarEInserirArquivo(
+                client,
+                submissao.id,
+                file
+            )
+        )
+    );
 
         const erroCriticoIA = arquivosInseridos.some(arq => arq.erro || !arq.dados_ia_extraidos);
         if (erroCriticoIA) {
@@ -263,9 +269,20 @@ exports.getMinhasSubmissoes = async (req, res) => {
 
 exports.getResumoHoras = async (req, res) => {
     const user_id = req.usuario.id;
-    const { course_id } = req.params;
+    let { course_id } = req.params;
 
     try {
+        if (!course_id || course_id === 'undefined') {
+            const defaultCourse = await pool.query(
+                `SELECT course_id FROM user_courses WHERE user_id = $1 AND is_active = true LIMIT 1`,
+                [user_id]
+            );
+            if (defaultCourse.rows.length === 0) {
+                return res.status(404).json({ erro: 'Aluno não matriculado em nenhum curso ativo.' });
+            }
+            course_id = defaultCourse.rows[0].course_id;
+        }
+
         const userCourse = await pool.query(
             `SELECT uc.course_id, c.name as course_name, c.minimum_required_hours
              FROM user_courses uc
@@ -342,9 +359,12 @@ exports.getMeusDados = async (req, res) => {
 
     try {
         const aluno = await pool.query(
-            `SELECT u.full_name as nome, u.email
+            `SELECT u.full_name as nome, u.email, c.name as curso_nome
              FROM users u
-             WHERE u.id = $1`,
+             LEFT JOIN user_courses uc ON uc.user_id = u.id AND uc.is_active = true
+             LEFT JOIN courses c ON c.id = uc.course_id
+             WHERE u.id = $1
+             LIMIT 1`,
             [user_id]
         );
 

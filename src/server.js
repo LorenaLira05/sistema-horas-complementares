@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
 const path = require('path');
+const cron = require('node-cron');
+const { exec } = require('child_process');
+require('dotenv').config();
 
 const app = express();
 
@@ -36,6 +38,17 @@ app.use((err, req, res, next) => {
     }
     console.error(err.stack);
     res.status(500).json({ erro: 'Erro interno do servidor.' });
+});
+
+const scriptPath = path.join(__dirname, 'scripts', 'executar_pipeline.py');
+const scriptDir  = path.join(__dirname, 'scripts');
+
+cron.schedule('0 3 * * *', () => {
+    exec(`python "${scriptPath}"`, { cwd: scriptDir }, (err, stdout, stderr) => {
+        if (err) console.error('[CRON] Pipeline falhou:', err.message);
+        else console.log('[CRON] Pipeline executada com sucesso');
+        if (stderr) console.warn('[CRON] Avisos:', stderr);
+    });
 });
 
 const PORT = process.env.PORT || 3001;

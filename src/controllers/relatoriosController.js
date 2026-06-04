@@ -11,28 +11,23 @@ exports.getRelatorios = async (req, res) => {
 
         if (isSuperAdmin) {
             const todosCursos = await pool.query(
-                `SELECT id
-                 FROM courses
-                 WHERE is_active = true`
+                `SELECT id FROM courses WHERE is_active = true`
             );
-
             course_ids = todosCursos.rows.map(r => r.id);
         } else {
             const cursosDoCoordenador = await pool.query(
                 `SELECT course_id
                  FROM course_coordinators
-                 WHERE user_id = $1
-                   AND is_active = true`,
+                 WHERE user_id = $1 AND is_active = true`,
                 [user_id]
             );
-
             course_ids = cursosDoCoordenador.rows.map(r => r.course_id);
         }
 
         if (course_ids.length === 0) {
             return res.status(200).json({
                 total_horas: 0,
-                eficiencia: { total: 0, aprovadas: 0, eficiencia_percentual: 0 },
+                eficiencia: { total: 0, aprovadas: 0, eficiencia_percentual: 0, media_horas_aluno: 0 },
                 horas_mensais: [],
                 eficiencia_por_curso: [],
                 log_atividades: [],
@@ -42,21 +37,27 @@ exports.getRelatorios = async (req, res) => {
             });
         }
 
-        // CONSULTAS DE HISTÓRICO E OPERAÇÕES (Originais do seu código)
         const relatorioGeral = await pool.query(
             `SELECT
-                COALESCE(SUM(total_horas_aprovadas), 0) AS total_horas,
-                COALESCE(SUM(total_submissoes), 0) AS total,
-                COALESCE(SUM(total_aprovadas), 0) AS aprovadas,
-                ROUND(AVG(eficiencia_percentual), 1) AS eficiencia_percentual
-             FROM view_relatorio_geral
-             WHERE course_id = ANY($1)`,
+                COALESCE(SUM(s.approved_hours), 0)                            AS total_horas,
+                COUNT(s.id)                                                    AS total,
+                COUNT(*) FILTER (WHERE s.status = 'approved')                 AS aprovadas,
+                ROUND(
+                    COUNT(*) FILTER (WHERE s.status = 'approved')::numeric
+                    / NULLIF(COUNT(s.id), 0) * 100
+                , 1)                                                           AS eficiencia_percentual,
+                ROUND(
+                    SUM(s.approved_hours) / NULLIF(COUNT(DISTINCT uc.user_id), 0)
+                , 1)                                                           AS media_horas_aluno
+            FROM submissions s
+            JOIN user_courses uc ON uc.id = s.user_course_id
+            WHERE uc.course_id = ANY($1)`,
             [course_ids]
         );
 
         const horasMensais = await pool.query(
             `SELECT
-                TO_CHAR(validated_at, 'Mon/YY') AS mes,
+                TO_CHAR(validated_at, 'YYYY-MM') AS mes,
                 COALESCE(SUM(approved_hours), 0) AS horas
              FROM validations
              WHERE validation_status = 'approved'
@@ -67,7 +68,7 @@ exports.getRelatorios = async (req, res) => {
                     WHERE course_id = ANY($1)
                )
              GROUP BY
-                TO_CHAR(validated_at, 'Mon/YY'),
+                TO_CHAR(validated_at, 'YYYY-MM'),
                 DATE_TRUNC('month', validated_at)
              ORDER BY DATE_TRUNC('month', validated_at)`,
             [course_ids]
@@ -113,52 +114,61 @@ exports.getRelatorios = async (req, res) => {
             [course_ids]
         );
 
-        //  NOVAS CONSULTAS DA PIPELINE PYTHON (Foco em Relatório Acadêmico)
-        
-        // Puxa todos os insights gerados para auditoria da coordenação
-        const insightsPipeline = await pool.query(
-            `SELECT tipo_insight, titulo, descricao, nivel_alerta, valor_numerico 
-             FROM insights
-             WHERE (referencia_tipo = 'curso' AND referencia_id = ANY($1))
-                OR (referencia_tipo = 'aluno' AND referencia_id IN (
-                    SELECT user_id FROM user_courses WHERE course_id = ANY($1)
-                ))
-             ORDER BY nivel_alerta DESC, tipo_insight;`,
-            [course_ids]
-        );
+        let insightsPipeline = { rows: [] };
+        let riscoPorCursoPipeline = { rows: [] };
 
-        const riscoPorCursoPipeline = await pool.query(
-            `SELECT 
-                c.name AS nome_curso,
-                cr.nivel_risco,
-                COUNT(*)::int AS total_alunos
-             FROM classificacao_risco cr
-             JOIN courses c ON c.id = cr.course_id
-             WHERE cr.course_id = ANY($1)
-             GROUP BY c.name, cr.nivel_risco
-             ORDER BY c.name, cr.nivel_risco;`,
-            [course_ids]
-        );
+        try {
+            insightsPipeline = await pool.query(
+                `SELECT tipo_insight, titulo, descricao, nivel_alerta, valor_numerico
+                 FROM insights
+                 WHERE (referencia_tipo = 'curso' AND referencia_id = ANY($1))
+                    OR (referencia_tipo = 'aluno' AND referencia_id IN (
+                        SELECT user_id FROM user_courses WHERE course_id = ANY($1)
+                    ))
+                 ORDER BY nivel_alerta DESC, tipo_insight`,
+                [course_ids]
+            );
+        } catch (e) {
+            console.warn('[Relatórios] Tabela insights não encontrada:', e.message);
+        }
+
+        try {
+            riscoPorCursoPipeline = await pool.query(
+                `SELECT
+                    c.name AS nome_curso,
+                    cr.nivel_risco,
+                    COUNT(*)::int AS total_alunos
+                 FROM classificacao_risco cr
+                 JOIN courses c ON c.id = cr.curso_id
+                 WHERE cr.curso_id = ANY($1)
+                 GROUP BY c.name, cr.nivel_risco
+                 ORDER BY c.name, cr.nivel_risco`,
+                [course_ids]
+            );
+        } catch (e) {
+            console.warn('[Relatórios] Tabela classificacao_risco não encontrada:', e.message);
+        }
+
+        const rg = relatorioGeral.rows[0];
 
         res.status(200).json({
-            total_horas: relatorioGeral.rows[0].total_horas,
+            total_horas: rg.total_horas,
             eficiencia: {
-                total: relatorioGeral.rows[0].total,
-                aprovadas: relatorioGeral.rows[0].aprovadas,
-                eficiencia_percentual: relatorioGeral.rows[0].eficiencia_percentual
+                total:                 rg.total,
+                aprovadas:             rg.aprovadas,
+                eficiencia_percentual: rg.eficiencia_percentual,
+                media_horas_aluno:     parseFloat(rg.media_horas_aluno || 0)
             },
-            horas_mensais: horasMensais.rows,
+            horas_mensais:       horasMensais.rows,
             eficiencia_por_curso: eficienciaPorCurso.rows,
-            log_atividades: logAtividades.rows,
-            avaliacao_alunos: avaliacaoAlunos.rows,
+            log_atividades:      logAtividades.rows,
+            avaliacao_alunos:    avaliacaoAlunos.rows,
             insights_detalhados: insightsPipeline.rows,
             resumo_risco_cursos: riscoPorCursoPipeline.rows
         });
 
     } catch (err) {
         console.error('Erro Relatórios:', err);
-        res.status(500).json({
-            erro: err.message
-        });
+        res.status(500).json({ erro: err.message });
     }
 };

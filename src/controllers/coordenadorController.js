@@ -32,11 +32,18 @@ exports.getListaCategorias = async (req, res) => {
 
 exports.getTodasRegras = async (req, res) => {
     try {
-        const resultado = await pool.query(
-            `SELECT FROM view_regras_atividades
-            WHERE coordinators_user_id = $1`,
-            [req.usuario.id]
-        );
+        const isSuperAdmin = req.usuario.perfis && req.usuario.perfis.includes('super_admin');
+        let query;
+        let params = [];
+
+        if (isSuperAdmin) {
+            query = `SELECT * FROM view_regras_atividades`;
+        } else {
+            query = `SELECT * FROM view_regras_atividades WHERE coordinator_user_id = $1`;
+            params = [req.usuario.id];
+        }
+
+        const resultado = await pool.query(query, params);
         res.status(200).json(resultado.rows);
     } catch (err) {
         res.status(500).json({ erro: err.message });
@@ -73,11 +80,16 @@ exports.getRegrasPorCurso = async (req, res) => {
     const { course_id } = req.params;
     const isSuperAdmin = req.usuario.perfis && req.usuario.perfis.includes('super_admin');
 
+    const courseIdNum = parseInt(course_id);
+    if (isNaN(courseIdNum)) {
+        return res.status(400).json({ erro: "ID de curso inválido." });
+    }
+
     if (!isSuperAdmin) {
         const acesso = await pool.query(
             `SELECT id FROM course_coordinators 
              WHERE user_id = $1 AND course_id = $2 AND is_active = true`,
-            [req.usuario.id, course_id]
+            [req.usuario.id, courseIdNum]
         );
         if (acesso.rows.length === 0) {
             return res.status(403).json({ erro: "Você não tem acesso a este curso." });
@@ -90,7 +102,7 @@ exports.getRegrasPorCurso = async (req, res) => {
              FROM course_activity_rules car
              JOIN categories cat ON cat.id = car.category_id
              WHERE car.course_id = $1`,
-            [course_id]
+            [courseIdNum]
         );
         res.status(200).json(resultado.rows);
     } catch (err) {
@@ -385,7 +397,7 @@ exports.deleteAluno = async (req, res) => {
 };
 
 exports.getSubmissoes = async (req, res) => {
-    const { course_id } = req.params;
+    let { course_id } = req.params;
     const { status, pagina = 1 } = req.query;
 
     const itensPorPagina = 10;
@@ -395,25 +407,57 @@ exports.getSubmissoes = async (req, res) => {
         req.usuario.perfis &&
         req.usuario.perfis.includes('super_admin');
 
-    if (!isSuperAdmin) {
-        const acesso = await pool.query(
-            `SELECT id
-             FROM course_coordinators
-             WHERE user_id = $1
-               AND course_id = $2
-               AND is_active = true`,
-            [req.usuario.id, course_id]
-        );
-
-        if (acesso.rows.length === 0) {
-            return res.status(403).json({
-                erro: 'Você não tem acesso a este curso.'
-            });
-        }
-    }
+    let course_ids = [];
 
     try {
-        let params = [course_id];
+        if (course_id) {
+            // Se course_id foi informado, valida acesso do coordenador
+            if (!isSuperAdmin) {
+                const acesso = await pool.query(
+                    `SELECT id
+                     FROM course_coordinators
+                     WHERE user_id = $1
+                       AND course_id = $2
+                       AND is_active = true`,
+                    [req.usuario.id, course_id]
+                );
+
+                if (acesso.rows.length === 0) {
+                    return res.status(403).json({
+                        erro: 'Você não tem acesso a este curso.'
+                    });
+                }
+            }
+            course_ids = [parseInt(course_id)];
+        } else {
+            // Se course_id NÃO foi informado, busca todos os cursos do coordenador
+            if (isSuperAdmin) {
+                const todosCursos = await pool.query(
+                    `SELECT id FROM courses WHERE is_active = true`
+                );
+                course_ids = todosCursos.rows.map(r => r.id);
+            } else {
+                const acesso = await pool.query(
+                    `SELECT course_id
+                     FROM course_coordinators
+                     WHERE user_id = $1
+                       AND is_active = true`,
+                    [req.usuario.id]
+                );
+                course_ids = acesso.rows.map(r => r.course_id);
+            }
+
+            if (course_ids.length === 0) {
+                return res.status(200).json({
+                    submissoes: [],
+                    contadores: { pendentes: 0, aprovadas: 0, reprovadas: 0, total: 0 },
+                    pagina: parseInt(pagina),
+                    total_paginas: 0
+                });
+            }
+        }
+
+        let params = [course_ids];
         let filtroStatus = '';
 
         if (status && status === 'PENDENTE') {
@@ -435,7 +479,7 @@ exports.getSubmissoes = async (req, res) => {
         const resultado = await pool.query(
             `SELECT *
              FROM view_submissoes_completo
-             WHERE course_id = $1
+             WHERE course_id = ANY($1::bigint[])
              ${filtroStatus}
              ORDER BY submitted_at DESC
              LIMIT $${params.length - 1}
@@ -460,8 +504,8 @@ exports.getSubmissoes = async (req, res) => {
                 COUNT(*) AS total
 
              FROM view_submissoes_completo
-             WHERE course_id = $1`,
-            [course_id]
+             WHERE course_id = ANY($1::bigint[])`,
+            [course_ids]
         );
 
         res.status(200).json({
@@ -469,7 +513,7 @@ exports.getSubmissoes = async (req, res) => {
             contadores: contadores.rows[0],
             pagina: parseInt(pagina),
             total_paginas: Math.ceil(
-                contadores.rows[0].total / itensPorPagina
+                (parseInt(contadores.rows[0].total) || 0) / itensPorPagina
             )
         });
 
@@ -483,12 +527,17 @@ exports.getSubmissoes = async (req, res) => {
 exports.getSubmissaoPorId = async (req, res) => {
     const { id } = req.params;
 
+    const idNum = parseInt(id);
+    if (isNaN(idNum)) {
+        return res.status(400).json({ erro: "ID de submissão inválido." });
+    }
+
     try {
         const resultado = await pool.query(
             `SELECT *
              FROM view_submissoes_detalhes
              WHERE submission_id = $1`,
-            [id]
+            [idNum]
         );
 
         if (resultado.rows.length === 0) {
@@ -634,9 +683,20 @@ exports.patchValidarSubmissao = async (req, res) => {
                 console.error('Erro ao enviar email:', err);
             });
 
-            console.timeEnd('envio_email');
-
             console.time('insert_notification');
+
+            const notificationTypeMap = {
+                approved: 'submission_approved',
+                rejected: 'submission_rejected',
+                returned_for_adjustment: 'submission_returned'
+            };
+
+            const notificationTitle =
+                status_final === 'approved'
+                    ? 'Sua submissão foi aprovada'
+                    : status_final === 'rejected'
+                        ? 'Sua submissão foi reprovada'
+                        : 'Sua submissão foi devolvida para ajuste';
 
             await pool.query(
                 `INSERT INTO notifications (
@@ -656,14 +716,8 @@ exports.patchValidarSubmissao = async (req, res) => {
                 [
                     aluno.rows[0].id,
                     submissao.rows[0].id,
-                    `submission_${status_final}`,
-                    `Sua submissão foi ${
-                        status_final === 'approved'
-                            ? 'aprovada'
-                            : status_final === 'rejected'
-                                ? 'reprovada'
-                                : 'devolvida para ajuste'
-                    }`,
+                    notificationTypeMap[status_final],
+                    notificationTitle,
                     comment || ''
                 ]
             );
@@ -781,10 +835,14 @@ exports.getResumoGeral = async (req, res) => {
 
                 COUNT(*) FILTER (
                     WHERE status = 'approved'
-                ) AS aprovadas
+                ) AS aprovadas,
 
-             FROM view_submissoes_completo
-             WHERE course_id = ANY($1)`,
+                COALESCE(SUM(CASE WHEN status = 'approved' THEN approved_hours ELSE 0 END), 0) AS horas_aprovadas,
+
+                COALESCE(SUM(CASE WHEN status NOT IN ('approved', 'rejected') THEN approved_hours ELSE 0 END), 0) AS horas_pendentes
+
+            FROM view_submissoes_completo
+            WHERE course_id = ANY($1)`,
             [course_ids]
         );
 
@@ -792,18 +850,24 @@ exports.getResumoGeral = async (req, res) => {
             alunos: alunos.rows,
             categorias: categorias.rows,
             contadores: {
-                total_alunos:
-                    contadores.rows[0].total_alunos,
+            total_alunos:
+                contadores.rows[0].total_alunos,
 
-                total_submissoes:
-                    contadores.rows[0].total_submissoes || 0,
+            total_submissoes:
+                contadores.rows[0].total_submissoes || 0,
 
-                pendentes:
-                    pendentesAprovadas.rows[0].pendentes || 0,
+            pendentes:
+                pendentesAprovadas.rows[0].pendentes || 0,
 
-                aprovadas:
-                    pendentesAprovadas.rows[0].aprovadas || 0
-            }
+            aprovadas:
+                pendentesAprovadas.rows[0].aprovadas || 0,
+
+            horas_aprovadas:
+                parseFloat(pendentesAprovadas.rows[0].horas_aprovadas) || 0,
+
+            horas_pendentes:
+                parseFloat(pendentesAprovadas.rows[0].horas_pendentes) || 0
+            },
         });
 
     } catch (err) {
